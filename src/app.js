@@ -41,7 +41,8 @@ const S = {
 if (!MODELS.some((m) => m.id === S.model)) S.model = DEFAULT_MODEL;
 function save(key, value) { S[key] = value; store.set(key, value); }
 
-function userText(context) {
+function userText(all) {
+  const context = all.filter((c) => c.fr);
   if (!context.length) return "Transcris et traduis l'extrait audio suivant.";
   const recent = context.map((c) => 'VI: ' + c.vi + '\nFR: ' + c.fr).join('\n');
   return 'Contexte récent (pour comprendre de quoi on parle, ne pas retraduire) :\n' + recent +
@@ -519,12 +520,13 @@ function enqueue(samples) {
 
 function recentContext(line) {
   const index = lines.indexOf(line);
-  const cutoff = line.createdAt - 120000;
+  const cutoff = line.createdAt - 180000;
   const out = [];
-  for (let k = index - 1; k >= 0 && out.length < 4; k--) {
+  for (let k = index - 1; k >= 0 && out.length < 6; k--) {
     const prev = lines[k];
     if (prev.createdAt < cutoff) break;
-    if (prev.status === 'done' && prev.fr) out.unshift({ vi: prev.vi, fr: prev.fr });
+    if (prev.dead || !prev.vi || isBlank(prev.vi)) continue;
+    out.unshift({ vi: prev.vi, fr: prev.status === 'done' ? prev.fr : '', who: speakerTag(prev) });
   }
   return out;
 }
@@ -669,18 +671,23 @@ self.onmessage = async (e) => {
     return;
   }
   if (m.type === 'embed') {
-    const list = [];
+    const list = [], spans = [];
     const t0 = performance.now();
     try {
       const { session } = await ready;
-      const w = fb.windows(voicedPart(m.samples));
+      const part = voicedPart(m.samples);
+      const off = (part.byteOffset - m.samples.byteOffset) / 4;
+      const w = fb.windows(part);
       if (w.n) {
         const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', w.data, [w.n, w.frames, 80]) });
         const all = out[session.outputNames[0]].data, d = all.length / w.n;
-        for (let i = 0; i < w.n; i++) list.push(all.slice(i * d, (i + 1) * d));
+        for (let i = 0; i < w.n; i++) {
+          list.push(all.slice(i * d, (i + 1) * d));
+          spans.push([off + Math.round(w.spans[i][0] * 16000), off + Math.round(w.spans[i][1] * 16000)]);
+        }
       }
     } catch (err) { /* modèle indisponible : la phrase reste sans couleur */ }
-    postMessage({ type: 'embeddings', id: m.id, list, ms: performance.now() - t0 });
+    postMessage({ type: 'embeddings', id: m.id, list, spans, ms: performance.now() - t0 });
   }
 };`
 ].join('\n');
@@ -716,6 +723,32 @@ function voiceEmbed(line, samples) {
   voice.worker.postMessage({ type: 'embed', id, samples }, [samples.buffer]);
 }
 
+/** Empreintes d'un extrait et positions des fenêtres ({list, spans}), ou null après `ms`. */
+function voiceEmbedWait(samples, ms) {
+  return new Promise((resolve) => {
+    if (!S.voices || !voice.worker || voice.state !== 'ready') { resolve(null); return; }
+    const id = ++voice.seq;
+    const timer = setTimeout(() => { voice.waiting.delete(id); resolve(null); }, ms);
+    voice.waiting.set(id, { resolve: (r) => { clearTimeout(timer); resolve(r); } });
+    voice.worker.postMessage({ type: 'embed', id, samples }, [samples.buffer]);
+  });
+}
+
+/** Voix de chaque fenêtre ; les voix devenues trop proches sont fusionnées partout. */
+function voiceAssign(list) {
+  const ids = voice.clusters.assign(list);
+  const merged = voice.clusters.mergeClose();
+  if (Object.keys(merged).length) {
+    for (const other of lines) {
+      if (!other.voiceIds) continue;
+      other.voiceIds = other.voiceIds.map((id) => (id !== null && merged[id] ? merged[id] : id));
+      render(other);
+    }
+    return ids.map((id) => (id !== null && merged[id] ? merged[id] : id));
+  }
+  return ids;
+}
+
 function voiceMessage(m) {
   if (m.type === 'ready') {
     voice.state = 'ready';
@@ -725,18 +758,12 @@ function voiceMessage(m) {
     voice.error = m.message;
   } else if (m.type === 'embeddings') {
     voice.ms = m.ms;
-    const line = voice.waiting.get(m.id);
+    const target = voice.waiting.get(m.id);
     voice.waiting.delete(m.id);
+    if (target && typeof target.resolve === 'function') { target.resolve({ list: m.list, spans: m.spans || [] }); return; }
+    const line = target;
     if (!line || line.dead || !m.list.length) return;
-    line.voiceIds = voice.clusters.assign(m.list);
-    const merged = voice.clusters.mergeClose();
-    if (Object.keys(merged).length) {
-      for (const other of lines) {
-        if (!other.voiceIds) continue;
-        other.voiceIds = other.voiceIds.map((id) => (id !== null && merged[id] ? merged[id] : id));
-        render(other);
-      }
-    }
+    line.voiceIds = voiceAssign(m.list);
     render(line);
   }
   if (!sheet.hidden) renderTech();
@@ -802,7 +829,7 @@ const LIVE_LEVELS = [
 ];
 // Mots du Centre et du Sud à bien reconnaître (la documentation conseille 100 termes au plus).
 const LIVE_VOCAB = [
-  'mô', 'tê', 'răng', 'rứa', 'chừ', 'mần', 'nỏ', 'ưng', 'mạ', 'mệ', 'nác', 'trốc', 'chộ', 'tau', 'hắn', 'bọ', 'ôn',
+  'Léa', 'Lia', 'mô', 'tê', 'răng', 'rứa', 'chừ', 'mần', 'nỏ', 'ưng', 'mạ', 'mệ', 'nác', 'trốc', 'chộ', 'tau', 'hắn', 'bọ', 'ôn',
   'đi mô', 'ở mô', 'mần chi', 'nói chi', 'làm chi', 'cái chi', 'chi rứa', 'răng rứa', 'rứa hả', 'rứa thì',
   'bữa ni', 'chỗ ni', 'cái ni', 'cái nớ', 'bên tê', 'bây chừ', 'mi nói', 'mi đi',
   'hông', 'hổng', 'dzậy', 'dzô', 'dìa', 'bển', 'ổng', 'bả', 'mắc quá', 'xị', 'củ'
@@ -810,9 +837,12 @@ const LIVE_VOCAB = [
 
 const TRANSLATE_PROMPT = `Tu es traducteur vietnamien → français. On te donne la transcription automatique de ce qui vient d'être dit autour d'une personne qui ne parle pas vietnamien : accent du Sud (Saigon), du Centre ou du Nord, souvent une conversation à plusieurs, avec du bruit. La transcription peut contenir des erreurs.
 
+C'est une conversation orale : des personnes présentes qui se parlent entre elles, de vive voix (récit, discussion, dispute), pas un texte écrit. Chaque phrase répond souvent à la précédente ou s'adresse à quelqu'un de présent : suis le fil de la conversation donné en contexte.
+
 Ta seule tâche : traduire la phrase en français, fidèlement. Tu ne juges pas, tu n'interprètes ni les intentions ni les émotions, tu ne commentes pas.
 
-- Même sens, même niveau de langue, ni plus ni moins. Français courant et naturel, sans mot à mot.
+- Même sens, même niveau de langue, ni plus ni moins. Français parlé, courant et naturel, comme on le dirait à l'oral, sans mot à mot ni tournure écrite.
+- Léa : prénom d'une personne présente (une Française), prononcé « Lia ». Dans la transcription, Lia, Li-a, Lê A, Lea, Léa, ou lia, lìa, lía employés comme un nom ou pour appeler quelqu'un (« Lia ơi », « con Lia », « chị Lia », « bé Lia ») désignent Léa : écris « Léa », ne le traduis pas comme un mot vietnamien.
 - N'ajoute ni émotion, ni intensité, ni exclamation, ni juron absents du texte.
 - Mot sans doute mal transcrit : prends le sens le plus vraisemblable d'après la phrase et le contexte, suivi de (?). Passage qui n'a aucun sens : traduis ce qui est sûr et mets […] pour le reste. N'invente rien.
 - Phrases de plusieurs personnes mêlées : traduis séparément chaque morceau compréhensible, séparés par « / », sans les fondre en une seule phrase.
@@ -822,7 +852,7 @@ Ta seule tâche : traduire la phrase en français, fidèlement. Tu ne juges pas,
 - Chiffres, sommes, heures, lieux, noms : exacts. À l'oral, les milliers sont souvent sous-entendus (« hai trăm » = 200 000 đ, « năm chục » = 50 000 đ) ; argot : « xị » ou « lít » = 100 000 đ, « củ » = 1 000 000 đ.
 - Sud : hông, hổng = không ; dzậy = vậy ; dzô = vào ; dìa = về ; nè = này ; hồi sáng = sáng nay ; hồi nãy = lúc nãy ; mắc = đắt ; xài = dùng ; kêu = gọi ; tụi = bọn ; bển = bên đó ; « cái quần (què) » = rejet moqueur (« mon œil », « n'importe quoi »).
 - Centre : mô = đâu, tê = kia, ni = này, nớ = đó, răng = sao, rứa = vậy, chi = gì, chừ = bây giờ, mần = làm, nỏ = không, ưng = thích, hắn = nó, mạ = mẹ, o = cô, mệ = bà, nác = nước, trốc = đầu, chộ = thấy.
-- Le contexte précédent sert à comprendre de quoi on parle : ne le retraduis pas.
+- Le fil de la conversation sert à comprendre de quoi on parle et qui s'adresse à qui : ne le retraduis pas. Les lettres entre crochets ([A], [B]…) indiquent qui parle (repérage automatique, parfois faux) : ne les recopie pas.
 - Passages en anglais ou en français : ne les traduis pas. Texte entièrement en anglais ou en français, ou sans parole réelle : réponds uniquement -
 
 Réponds uniquement par la traduction française, sur une ligne, sans guillemets ni étiquette.`;
@@ -1307,22 +1337,57 @@ function ringAudio(a, b, max) {
 const TRANSCRIBE_MODEL = 'gemini-3.5-transcribe';
 const phr = { vocab: true, note: '' };
 
-/** Fin de phrase : son audio part à la transcription (avec 1 s avant le premier mot). */
+let phraseChain = Promise.resolve();
+
+/** Fin de phrase : son audio part à la transcription (avec 1 s avant le premier mot). Les phrases
+ * sont traitées dans l'ordre, pour que les lignes s'affichent dans l'ordre de la conversation. */
 function phraseCut(c) {
   if (!c.speech) return;
-  const samples = ringAudio(Math.max(c.start, c.first - RATE), c.at);
+  const from = Math.max(c.start, c.first - RATE);
+  const samples = ringAudio(from, c.at);
   if (!samples || samples.length < 0.3 * RATE) return;
+  phraseChain = phraseChain.then(() => phraseWindow(c, from, samples)).catch(() => {});
+}
+
+/**
+ * Plusieurs personnes à la suite dans la même phrase : on la coupe là où la voix change (voix
+ * reconnues sur l'appareil), et chacune est transcrite et traduite à part. Pour ne rien perdre
+ * en vitesse, la transcription de la phrase entière part en même temps que ce calcul ; elle
+ * sert s'il n'y a qu'une voix. Une phrase trop courte pour deux tours de parole part directement.
+ */
+async function phraseWindow(c, from, samples) {
+  const audio = toBase64(encodeWAV(samples, RATE));
+  if (c.last - c.first < 3.5 * RATE || !S.voices || voice.state !== 'ready') {
+    phraseLine(audio, null, [c.first, c.last]);
+    return;
+  }
+  const whole = transcribe(audio).then((text) => ({ text }), (err) => ({ err }));
+  const r = await voiceEmbedWait(samples.slice(), 2500);
+  const ids = r && r.list.length ? voiceAssign(r.list) : null;
+  const parts = ids ? speakerParts(samples, ids, r.spans, RATE) : null;
+  phr.split = { windows: ids ? ids.length : 0, voices: ids ? voiceRuns(ids).length : 0, parts: parts ? parts.length : 0 };
+  if (!parts || parts.length < 2) {
+    phraseLine(audio, parts ? parts[0].ids : null, [c.first, c.last], whole);
+    return;
+  }
+  for (const p of parts) {
+    const part = samples.subarray(p.a, p.b);
+    phraseLine(toBase64(encodeWAV(part, RATE)), p.ids, [from + p.a, from + p.b]);
+  }
+}
+
+function phraseLine(audio, ids, span, pending) {
   const line = {
-    id: ++lineSeq, kind: 'phrase', createdAt: Date.now(), audio: toBase64(encodeWAV(samples, RATE)),
-    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false, voiceIds: null, span: [c.first, c.last]
+    id: ++lineSeq, kind: 'phrase', createdAt: Date.now(), audio,
+    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false, voiceIds: ids && ids.length ? ids : null, span
   };
   lines.push(line);
   mountLine(line);
-  transcribePhrase(line);
-  liveVoice(line);
+  transcribePhrase(line, pending);
+  if (!line.voiceIds) liveVoice(line);
 }
 
-async function transcribePhrase(line) {
+async function transcribePhrase(line, pending) {
   if (line.dead || line.transcribing || !line.audio) return;
   if (!S.apiKey) {
     Object.assign(line, { status: 'failed', error: 'Ajoutez votre clé API Gemini dans les réglages.', autoRetry: false });
@@ -1336,7 +1401,14 @@ async function transcribePhrase(line) {
   updateStatus();
   const t0 = performance.now();
   try {
-    const text = await transcribe(line.audio);
+    let text;
+    if (pending) {
+      const r = await pending;   // transcription déjà lancée pour cette phrase
+      if (r.err) throw r.err;
+      text = r.text;
+    } else {
+      text = await transcribe(line.audio);
+    }
     tech.asr = performance.now() - t0;
     if (line.dead) return;
     const vi = String(text || '').replace(/\s+/g, ' ').trim();
@@ -1434,12 +1506,21 @@ function phraseFallback(err) {
 }
 
 function cleanFrench(text) {
-  return String(text || '').replace(/\s*\n+\s*/g, ' ').replace(/^\s*FR\s*[:：]\s*/i, '').replace(/^["«“]\s*|\s*["»”]$/g, '').trim();
+  return String(text || '').replace(/\s*\n+\s*/g, ' ').replace(/^\s*(\[[A-Z]\]\s*)?FR\s*[:：]\s*/i, '').replace(/^\s*\[[A-Z]\]\s*/, '').replace(/^["«“]\s*|\s*["»”]$/g, '').trim();
 }
 
-function translateUserText(context, vi) {
-  const recent = context.length ? 'Contexte récent (ne pas retraduire) :\n' + context.map((c) => 'VI: ' + c.vi + '\nFR: ' + c.fr).join('\n') + '\n\n' : '';
-  return recent + 'Phrase à traduire :\n' + vi;
+/** Lettres des voix d'une ligne (« A », « A+B »), ou ''. */
+function speakerTag(line) {
+  return S.voices && line.voiceIds ? voiceRuns(line.voiceIds).map((id) => voiceLabel(id).letter).join('+') : '';
+}
+
+/** Le fil de la conversation (phrases déjà transcrites, traduites ou non), puis la phrase à traduire. */
+function translateUserText(context, line) {
+  const tag = (who) => (who ? '[' + who + '] ' : '');
+  const thread = context.map((c) => tag(c.who) + 'VI: ' + c.vi + (c.fr ? '\n' + tag(c.who) + 'FR: ' + c.fr : '')).join('\n');
+  const who = speakerTag(line);
+  return (thread ? 'Fil de la conversation (ne pas retraduire) :\n' + thread + '\n\n' : '') +
+    (who ? 'Qui parle : [' + who + ']\n' : '') + 'Phrase à traduire :\n' + line.vi;
 }
 
 /** Traduction d'une phrase transcrite (texte seul : plus rapide qu'avec l'audio). */
@@ -1467,7 +1548,7 @@ async function translateText(line) {
   try {
     const raw = await gemini({
       system: TRANSLATE_PROMPT,
-      text: translateUserText(recentContext(line), vi),
+      text: translateUserText(recentContext(line), { vi, voiceIds: line.voiceIds }),
       maxTokens: 512,
       onText: (text) => {
         if (!first) first = performance.now();
@@ -1540,13 +1621,13 @@ const CUTS = [
     id: 'complete', title: 'Phrases complètes',
     sub: 'Attend une vraie pause avant de traduire : phrases entières, la traduction arrive un peu plus tard (recommandé)',
     tuning: { endSilence: 0.7, maxSegment: 8, cutSearchWindow: 2 },
-    turns: { endSilence: 0.8, softMax: 8, softPause: 0.25, hardMax: 14 }
+    turns: { endSilence: 1.0, softMax: 10, softPause: 0.25, hardMax: 16 }
   },
   {
     id: 'fast', title: 'Rapide',
     sub: 'Traduit dès une courte pause : plus réactif, mais phrases parfois coupées',
     tuning: {},
-    turns: { endSilence: 0.5, softMax: 5, softPause: 0.2, hardMax: 9 }
+    turns: { endSilence: 0.6, softMax: 6, softPause: 0.2, hardMax: 10 }
   }
 ];
 function currentCut() {

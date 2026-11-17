@@ -348,10 +348,10 @@ class Agc {
 class Turns {
   constructor(tuning) {
     const t = Object.assign({
-      endSilence: 0.8,   // pause qui clôt une phrase
-      softMax: 8,        // passé cette durée depuis le premier mot, une courte pause suffit…
+      endSilence: 1.0,   // pause qui clôt une phrase
+      softMax: 10,       // passé cette durée depuis le premier mot, une courte pause suffit…
       softPause: 0.25,   // …de cette longueur
-      hardMax: 14,       // durée maximale depuis le premier mot
+      hardMax: 16,       // durée maximale depuis le premier mot
       idleMax: 20,       // fenêtre sans parole refermée après cette durée
       minVoiced: 0.2     // parole minimale pour qu'une fenêtre compte
     }, tuning || {});

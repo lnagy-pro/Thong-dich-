@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Yh4HXFj57EG140ccu+p650aUxR+xBQe/8SoHYyJjNiI=' 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'sha256-BxRQVYc7Wt/KEvdBtu6pNakLBa4/b3q5r8MsGTIOv+s='; img-src data:; connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://cdn.jsdelivr.net; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IYaCM4Zi0ejeTGzgrPgEwQzWOCPvd35IfmCvnqiM3VE=' 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'sha256-BxRQVYc7Wt/KEvdBtu6pNakLBa4/b3q5r8MsGTIOv+s='; img-src data:; connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://cdn.jsdelivr.net; worker-src blob:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Thông Dịch</title>
 <meta name="description" content="Interprète en direct : vietnamien du Centre vers le français, avec Gemini.">
@@ -955,10 +955,10 @@ class Agc {
 class Turns {
   constructor(tuning) {
     const t = Object.assign({
-      endSilence: 0.8,   // pause qui clôt une phrase
-      softMax: 8,        // passé cette durée depuis le premier mot, une courte pause suffit…
+      endSilence: 1.0,   // pause qui clôt une phrase
+      softMax: 10,       // passé cette durée depuis le premier mot, une courte pause suffit…
       softPause: 0.25,   // …de cette longueur
-      hardMax: 14,       // durée maximale depuis le premier mot
+      hardMax: 16,       // durée maximale depuis le premier mot
       idleMax: 20,       // fenêtre sans parole refermée après cette durée
       minVoiced: 0.2     // parole minimale pour qu'une fenêtre compte
     }, tuning || {});
@@ -1477,8 +1477,80 @@ function voiceRuns(ids) {
   return runs;
 }
 
+/**
+ * Tours de parole d'une phrase : on coupe là où la voix change, au point le plus calme entre les
+ * deux voix, pour traduire chaque personne à part. Un tour d'une seule fenêtre (≈ 1,5 s : « ừ »,
+ * « dạ ») reste avec ses voisins, et aucune partie ne fait moins d'une seconde.
+ * ids : voix de chaque fenêtre (null = inconnue) ; spans : [début, fin] de chaque fenêtre, en
+ * échantillons de x. Rend [{a, b, ids}] : une seule partie s'il n'y a rien à couper.
+ */
+function speakerParts(x, ids, spans, rate) {
+  const whole = [{ a: 0, b: x.length, ids: ids.slice() }];
+  if (ids.length < 4 || spans.length !== ids.length) return whole;
+  // Suites de fenêtres de la même voix ; une fenêtre inconnue suit le tour en cours.
+  const runs = [];
+  ids.forEach((id, i) => {
+    const last = runs[runs.length - 1];
+    if (last && (id === null || id === last.id)) last.idx.push(i);
+    else if (id !== null) runs.push({ id, idx: [i] });
+  });
+  const count = (r) => r.idx.filter((i) => ids[i] === r.id).length;
+  const turns = [];
+  for (const r of runs) {
+    const prev = turns[turns.length - 1];
+    if (prev && (prev.id === r.id || count(r) < 2)) prev.idx.push(...r.idx);
+    else turns.push({ id: r.id, idx: r.idx.slice() });
+  }
+  if (turns.length > 1 && count(turns[0]) < 2) {
+    turns[1].idx = turns[0].idx.concat(turns[1].idx);
+    turns.shift();
+  }
+  if (turns.length < 2) return whole;
+  const center = (i) => (spans[i][0] + spans[i][1]) / 2;
+  const bounds = [0];
+  for (let k = 0; k + 1 < turns.length; k++) {
+    const own = (t) => t.idx.filter((i) => ids[i] === t.id);
+    const c0 = center(Math.max.apply(null, own(turns[k]))), c1 = center(Math.min.apply(null, own(turns[k + 1])));
+    const lo = Math.max(0, Math.min(c0, c1) - 0.25 * rate), hi = Math.min(x.length, Math.max(c0, c1) + 0.25 * rate);
+    bounds.push(quietest(x, lo, hi));
+  }
+  bounds.push(x.length);
+  // Une partie de moins d'une seconde rejoint sa voisine la plus courte (la coupe est retirée).
+  for (let k = 0; bounds.length > 2 && k + 1 < bounds.length;) {
+    if (bounds[k + 1] - bounds[k] >= rate) { k++; continue; }
+    const last = bounds.length - 2;
+    const drop = k === 0 ? 1 : k === last ? k : (bounds[k] - bounds[k - 1] <= bounds[k + 2] - bounds[k + 1] ? k : k + 1);
+    bounds.splice(drop, 1);
+    k = 0;
+  }
+  if (bounds.length <= 2) return whole;
+  const parts = [];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const a = bounds[k], b = bounds[k + 1];
+    const own = ids.filter((id, i) => center(i) >= a && center(i) < b);
+    // Voix principale de la partie (les fenêtres à cheval sur la coupe portent parfois la voisine).
+    const tally = new Map();
+    for (const id of own) if (id !== null) tally.set(id, (tally.get(id) || 0) + 1);
+    let main = null, most = 0, known = 0;
+    for (const [id, n] of tally) { known += n; if (n > most) { most = n; main = id; } }
+    parts.push({ a, b, ids: main !== null && most >= 0.6 * known ? [main] : own });
+  }
+  return parts;
+}
+
+/** Milieu de la tranche de 20 ms la plus calme entre lo et hi (échantillons à 16 kHz). */
+function quietest(x, lo, hi) {
+  let best = Math.round((lo + hi) / 2), min = Infinity;
+  for (let s = Math.round(lo); s + 320 <= hi; s += 160) {
+    let e = 0;
+    for (let k = s; k < s + 320; k++) e += x[k] * x[k];
+    if (e < min) { min = e; best = s + 160; }
+  }
+  return best;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { Fbank, voicedPart, VoiceClusters, voiceRuns };
+  module.exports = { Fbank, voicedPart, VoiceClusters, voiceRuns, speakerParts, quietest };
 }
 
 // ─── Thông Dịch : interprète vietnamien (Centre) → français ──────────────────
@@ -1486,7 +1558,7 @@ if (typeof module !== 'undefined') {
 // le thread audio (AudioWorklet) et chaque phrase part aussitôt vers Gemini, en
 // parallèle des précédentes. Rien n'est perdu pendant qu'une traduction est en cours.
 
-const PROMPT = "Tu es traducteur vietnamien → français. Tu reçois un court extrait audio capté par le micro d'un téléphone : des gens qui parlent autour, avec l'accent du Sud (Saigon), du Centre ou du Nord, souvent à plusieurs et avec du bruit.\n\nTa seule tâche : transcrire ce qui est dit, puis le traduire fidèlement. Tu ne juges pas, tu n'interprètes ni les intentions ni les émotions, tu ne commentes pas.\n\nLIGNE VI (transcription)\n- Vietnamien avec diacritiques, tel que prononcé, en gardant les mots régionaux et familiers.\n- Plusieurs personnes : sépare les répliques par « / ». Si elles parlent en même temps, transcris d'abord la voix la plus claire ; un passage trop mêlé pour être compris devient […], sans fondre les phrases ensemble.\n- Passage inaudible : […]. N'invente jamais rien.\n- Ignore les bruits, les rires, les applaudissements et la musique : ne les note pas.\n- Ignore aussi ce qui est dit en anglais ou en français : ne le transcris pas et ne le traduis pas.\n\nLIGNE FR (traduction)\n- Traduis exactement ce qui est dit : même sens, même niveau de langue, ni plus ni moins. En français courant et naturel, sans mot à mot.\n- N'ajoute ni émotion, ni intensité, ni exclamation, ni juron absents des mots prononcés. Une phrase neutre reste neutre, même dite fort ou vite : ne déduis aucune humeur du volume, du débit ou de l'accent.\n- Les particules finales (nè, nha, hen, nhen, mà, hỉ, hè, tề, nờ, nghe, à, hả, ơi…) sont des marques ordinaires de l'oral : elles n'indiquent ni agacement ni agressivité.\n- Tao/mày (tau/mi au Centre) sont des pronoms familiers ordinaires entre amis, en famille ou entre égaux : traduis-les par « je » et « tu », sans y voir d'hostilité. Anh, em, chị, cô, chú, bác, ông, bà, o, mệ : tu ou vous selon la relation ; ổng, bả, ảnh, chỉ, nó, hắn : il ou elle.\n- Une insulte ou une menace dite avec des mots explicites se traduit telle quelle, sans l'adoucir ni l'amplifier.\n- Chiffres, sommes, heures, lieux, noms : exacts. Argent à l'oral, les milliers sont souvent sous-entendus (« hai trăm » = 200 000 đ, « năm chục » = 50 000 đ) ; argot : « xị » ou « lít » = 100 000 đ, « củ » = 1 000 000 đ.\n- Passage ambigu : donne la lecture la plus probable suivie de (?).\n- L'extrait peut commencer ou finir au milieu d'une phrase : traduis le fragment tel quel, sans le compléter.\n- Autre langue que le vietnamien, l'anglais ou le français : transcris-la et traduis-la quand même en français.\n- Le contexte précédent, s'il est fourni, sert à comprendre de quoi on parle et à lever les ambiguïtés : ne le retraduis pas.\n\nPARLER DU SUD (Saigon)\n- Les tons hỏi et ngã se confondent ; v, d et gi se prononcent souvent comme un « y » : déduis le mot du contexte.\n- Mots fréquents : hông, hổng = không ; dzậy = vậy ; dzô, vô = vào ; dìa = về ; nè = này (« tiens », « regarde ») ; hồi sáng = sáng nay ; hồi nãy = lúc nãy ; bữa nay = hôm nay ; mắc = đắt ; mắc cười = buồn cười ; xài = dùng, tiêu ; kêu = gọi ; tụi = bọn ; ổng, bả, ảnh, chỉ = ông ấy, bà ấy, anh ấy, chị ấy ; bển = bên đó ; chén = bát ; muỗng = thìa ; trái = quả ; heo = lợn ; nhậu = boire entre amis ; « cái quần (què) » = rejet moqueur (« mon œil », « n'importe quoi »).\n\nPARLERS DU CENTRE (Huế, Quảng Trị, Quảng Bình, Nghệ An, Hà Tĩnh, Đà Nẵng, Quảng Nam, Quảng Ngãi, Bình Định)\n- Les tons hỏi, ngã et nặng se confondent souvent : déduis le mot du contexte.\n- Mots fréquents : mô = đâu, tê = kia, ni = này, nớ = đó, răng = sao, rứa = vậy/thế, ri = thế này, chi = gì, chừ = bây giờ, mần = làm, nỏ = không, ưng = thích, tau = tao, mi = mày, hắn = nó, bọn bay = chúng mày, mạ = mẹ, o = cô, mệ = bà, eng = anh, ả = chị, nác = nước, trốc = đầu, chộ = thấy, nhởi = chơi, bổ = ngã, đọi = bát.\n- Accent quảng (Đà Nẵng, Quảng Nam) : voyelles déformées (« Quảng Nôm » = Quảng Nam).\n\nFORMAT STRICT : deux lignes, rien d'autre, pas de markdown.\nVI: <transcription>\nFR: <traduction>\n\nAucune parole vietnamienne intelligible (bruit, rires, applaudissements, musique, silence, ou seulement de l'anglais ou du français) : réponds uniquement par la ligne VI: -";
+const PROMPT = "Tu es traducteur vietnamien → français. Tu reçois un court extrait audio capté par le micro d'un téléphone : des gens qui parlent autour, avec l'accent du Sud (Saigon), du Centre ou du Nord, souvent à plusieurs et avec du bruit.\n\nC'est une conversation orale : des personnes présentes qui se parlent entre elles, de vive voix (récit, discussion, dispute), pas un texte écrit. Chaque phrase répond souvent à la précédente ou s'adresse à quelqu'un de présent.\n\nTa seule tâche : transcrire ce qui est dit, puis le traduire fidèlement. Tu ne juges pas, tu n'interprètes ni les intentions ni les émotions, tu ne commentes pas.\n\nLIGNE VI (transcription)\n- Vietnamien avec diacritiques, tel que prononcé, en gardant les mots régionaux et familiers.\n- Plusieurs personnes : sépare les répliques par « / ». Si elles parlent en même temps, transcris d'abord la voix la plus claire ; un passage trop mêlé pour être compris devient […], sans fondre les phrases ensemble.\n- Passage inaudible : […]. N'invente jamais rien.\n- Léa : prénom d'une personne présente (une Française), prononcé « Lia ». Écris-le « Léa » (« Lia ơi », « con Lia », « chị Lia »…), jamais comme un mot vietnamien (lìa…).\n- Ignore les bruits, les rires, les applaudissements et la musique : ne les note pas.\n- Ignore aussi ce qui est dit en anglais ou en français : ne le transcris pas et ne le traduis pas.\n\nLIGNE FR (traduction)\n- Traduis exactement ce qui est dit : même sens, même niveau de langue, ni plus ni moins. En français parlé, courant et naturel, comme on le dirait à l'oral, sans mot à mot ni tournure écrite.\n- « Léa » reste « Léa » : c'est un prénom, ne le traduis pas.\n- N'ajoute ni émotion, ni intensité, ni exclamation, ni juron absents des mots prononcés. Une phrase neutre reste neutre, même dite fort ou vite : ne déduis aucune humeur du volume, du débit ou de l'accent.\n- Les particules finales (nè, nha, hen, nhen, mà, hỉ, hè, tề, nờ, nghe, à, hả, ơi…) sont des marques ordinaires de l'oral : elles n'indiquent ni agacement ni agressivité.\n- Tao/mày (tau/mi au Centre) sont des pronoms familiers ordinaires entre amis, en famille ou entre égaux : traduis-les par « je » et « tu », sans y voir d'hostilité. Anh, em, chị, cô, chú, bác, ông, bà, o, mệ : tu ou vous selon la relation ; ổng, bả, ảnh, chỉ, nó, hắn : il ou elle.\n- Une insulte ou une menace dite avec des mots explicites se traduit telle quelle, sans l'adoucir ni l'amplifier.\n- Chiffres, sommes, heures, lieux, noms : exacts. Argent à l'oral, les milliers sont souvent sous-entendus (« hai trăm » = 200 000 đ, « năm chục » = 50 000 đ) ; argot : « xị » ou « lít » = 100 000 đ, « củ » = 1 000 000 đ.\n- Passage ambigu : donne la lecture la plus probable suivie de (?).\n- L'extrait peut commencer ou finir au milieu d'une phrase : traduis le fragment tel quel, sans le compléter.\n- Autre langue que le vietnamien, l'anglais ou le français : transcris-la et traduis-la quand même en français.\n- Le contexte précédent, s'il est fourni, sert à comprendre de quoi on parle, qui s'adresse à qui, et à lever les ambiguïtés : ne le retraduis pas.\n\nPARLER DU SUD (Saigon)\n- Les tons hỏi et ngã se confondent ; v, d et gi se prononcent souvent comme un « y » : déduis le mot du contexte.\n- Mots fréquents : hông, hổng = không ; dzậy = vậy ; dzô, vô = vào ; dìa = về ; nè = này (« tiens », « regarde ») ; hồi sáng = sáng nay ; hồi nãy = lúc nãy ; bữa nay = hôm nay ; mắc = đắt ; mắc cười = buồn cười ; xài = dùng, tiêu ; kêu = gọi ; tụi = bọn ; ổng, bả, ảnh, chỉ = ông ấy, bà ấy, anh ấy, chị ấy ; bển = bên đó ; chén = bát ; muỗng = thìa ; trái = quả ; heo = lợn ; nhậu = boire entre amis ; « cái quần (què) » = rejet moqueur (« mon œil », « n'importe quoi »).\n\nPARLERS DU CENTRE (Huế, Quảng Trị, Quảng Bình, Nghệ An, Hà Tĩnh, Đà Nẵng, Quảng Nam, Quảng Ngãi, Bình Định)\n- Les tons hỏi, ngã et nặng se confondent souvent : déduis le mot du contexte.\n- Mots fréquents : mô = đâu, tê = kia, ni = này, nớ = đó, răng = sao, rứa = vậy/thế, ri = thế này, chi = gì, chừ = bây giờ, mần = làm, nỏ = không, ưng = thích, tau = tao, mi = mày, hắn = nó, bọn bay = chúng mày, mạ = mẹ, o = cô, mệ = bà, eng = anh, ả = chị, nác = nước, trốc = đầu, chộ = thấy, nhởi = chơi, bổ = ngã, đọi = bát.\n- Accent quảng (Đà Nẵng, Quảng Nam) : voyelles déformées (« Quảng Nôm » = Quảng Nam).\n\nFORMAT STRICT : deux lignes, rien d'autre, pas de markdown.\nVI: <transcription>\nFR: <traduction>\n\nAucune parole vietnamienne intelligible (bruit, rires, applaudissements, musique, silence, ou seulement de l'anglais ou du français) : réponds uniquement par la ligne VI: -";
 
 const MODELS = [
   { id: 'gemini-3.5-flash-lite', title: 'Ultra-rapide', sub: 'Gemini 3.5 Flash-Lite · latence minimale', thinking: 'minimal' },
@@ -1524,7 +1596,8 @@ const S = {
 if (!MODELS.some((m) => m.id === S.model)) S.model = DEFAULT_MODEL;
 function save(key, value) { S[key] = value; store.set(key, value); }
 
-function userText(context) {
+function userText(all) {
+  const context = all.filter((c) => c.fr);
   if (!context.length) return "Transcris et traduis l'extrait audio suivant.";
   const recent = context.map((c) => 'VI: ' + c.vi + '\nFR: ' + c.fr).join('\n');
   return 'Contexte récent (pour comprendre de quoi on parle, ne pas retraduire) :\n' + recent +
@@ -2002,12 +2075,13 @@ function enqueue(samples) {
 
 function recentContext(line) {
   const index = lines.indexOf(line);
-  const cutoff = line.createdAt - 120000;
+  const cutoff = line.createdAt - 180000;
   const out = [];
-  for (let k = index - 1; k >= 0 && out.length < 4; k--) {
+  for (let k = index - 1; k >= 0 && out.length < 6; k--) {
     const prev = lines[k];
     if (prev.createdAt < cutoff) break;
-    if (prev.status === 'done' && prev.fr) out.unshift({ vi: prev.vi, fr: prev.fr });
+    if (prev.dead || !prev.vi || isBlank(prev.vi)) continue;
+    out.unshift({ vi: prev.vi, fr: prev.status === 'done' ? prev.fr : '', who: speakerTag(prev) });
   }
   return out;
 }
@@ -2152,18 +2226,23 @@ self.onmessage = async (e) => {
     return;
   }
   if (m.type === 'embed') {
-    const list = [];
+    const list = [], spans = [];
     const t0 = performance.now();
     try {
       const { session } = await ready;
-      const w = fb.windows(voicedPart(m.samples));
+      const part = voicedPart(m.samples);
+      const off = (part.byteOffset - m.samples.byteOffset) / 4;
+      const w = fb.windows(part);
       if (w.n) {
         const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', w.data, [w.n, w.frames, 80]) });
         const all = out[session.outputNames[0]].data, d = all.length / w.n;
-        for (let i = 0; i < w.n; i++) list.push(all.slice(i * d, (i + 1) * d));
+        for (let i = 0; i < w.n; i++) {
+          list.push(all.slice(i * d, (i + 1) * d));
+          spans.push([off + Math.round(w.spans[i][0] * 16000), off + Math.round(w.spans[i][1] * 16000)]);
+        }
       }
     } catch (err) { /* modèle indisponible : la phrase reste sans couleur */ }
-    postMessage({ type: 'embeddings', id: m.id, list, ms: performance.now() - t0 });
+    postMessage({ type: 'embeddings', id: m.id, list, spans, ms: performance.now() - t0 });
   }
 };`
 ].join('\n');
@@ -2199,6 +2278,32 @@ function voiceEmbed(line, samples) {
   voice.worker.postMessage({ type: 'embed', id, samples }, [samples.buffer]);
 }
 
+/** Empreintes d'un extrait et positions des fenêtres ({list, spans}), ou null après `ms`. */
+function voiceEmbedWait(samples, ms) {
+  return new Promise((resolve) => {
+    if (!S.voices || !voice.worker || voice.state !== 'ready') { resolve(null); return; }
+    const id = ++voice.seq;
+    const timer = setTimeout(() => { voice.waiting.delete(id); resolve(null); }, ms);
+    voice.waiting.set(id, { resolve: (r) => { clearTimeout(timer); resolve(r); } });
+    voice.worker.postMessage({ type: 'embed', id, samples }, [samples.buffer]);
+  });
+}
+
+/** Voix de chaque fenêtre ; les voix devenues trop proches sont fusionnées partout. */
+function voiceAssign(list) {
+  const ids = voice.clusters.assign(list);
+  const merged = voice.clusters.mergeClose();
+  if (Object.keys(merged).length) {
+    for (const other of lines) {
+      if (!other.voiceIds) continue;
+      other.voiceIds = other.voiceIds.map((id) => (id !== null && merged[id] ? merged[id] : id));
+      render(other);
+    }
+    return ids.map((id) => (id !== null && merged[id] ? merged[id] : id));
+  }
+  return ids;
+}
+
 function voiceMessage(m) {
   if (m.type === 'ready') {
     voice.state = 'ready';
@@ -2208,18 +2313,12 @@ function voiceMessage(m) {
     voice.error = m.message;
   } else if (m.type === 'embeddings') {
     voice.ms = m.ms;
-    const line = voice.waiting.get(m.id);
+    const target = voice.waiting.get(m.id);
     voice.waiting.delete(m.id);
+    if (target && typeof target.resolve === 'function') { target.resolve({ list: m.list, spans: m.spans || [] }); return; }
+    const line = target;
     if (!line || line.dead || !m.list.length) return;
-    line.voiceIds = voice.clusters.assign(m.list);
-    const merged = voice.clusters.mergeClose();
-    if (Object.keys(merged).length) {
-      for (const other of lines) {
-        if (!other.voiceIds) continue;
-        other.voiceIds = other.voiceIds.map((id) => (id !== null && merged[id] ? merged[id] : id));
-        render(other);
-      }
-    }
+    line.voiceIds = voiceAssign(m.list);
     render(line);
   }
   if (!sheet.hidden) renderTech();
@@ -2285,7 +2384,7 @@ const LIVE_LEVELS = [
 ];
 // Mots du Centre et du Sud à bien reconnaître (la documentation conseille 100 termes au plus).
 const LIVE_VOCAB = [
-  'mô', 'tê', 'răng', 'rứa', 'chừ', 'mần', 'nỏ', 'ưng', 'mạ', 'mệ', 'nác', 'trốc', 'chộ', 'tau', 'hắn', 'bọ', 'ôn',
+  'Léa', 'Lia', 'mô', 'tê', 'răng', 'rứa', 'chừ', 'mần', 'nỏ', 'ưng', 'mạ', 'mệ', 'nác', 'trốc', 'chộ', 'tau', 'hắn', 'bọ', 'ôn',
   'đi mô', 'ở mô', 'mần chi', 'nói chi', 'làm chi', 'cái chi', 'chi rứa', 'răng rứa', 'rứa hả', 'rứa thì',
   'bữa ni', 'chỗ ni', 'cái ni', 'cái nớ', 'bên tê', 'bây chừ', 'mi nói', 'mi đi',
   'hông', 'hổng', 'dzậy', 'dzô', 'dìa', 'bển', 'ổng', 'bả', 'mắc quá', 'xị', 'củ'
@@ -2293,9 +2392,12 @@ const LIVE_VOCAB = [
 
 const TRANSLATE_PROMPT = `Tu es traducteur vietnamien → français. On te donne la transcription automatique de ce qui vient d'être dit autour d'une personne qui ne parle pas vietnamien : accent du Sud (Saigon), du Centre ou du Nord, souvent une conversation à plusieurs, avec du bruit. La transcription peut contenir des erreurs.
 
+C'est une conversation orale : des personnes présentes qui se parlent entre elles, de vive voix (récit, discussion, dispute), pas un texte écrit. Chaque phrase répond souvent à la précédente ou s'adresse à quelqu'un de présent : suis le fil de la conversation donné en contexte.
+
 Ta seule tâche : traduire la phrase en français, fidèlement. Tu ne juges pas, tu n'interprètes ni les intentions ni les émotions, tu ne commentes pas.
 
-- Même sens, même niveau de langue, ni plus ni moins. Français courant et naturel, sans mot à mot.
+- Même sens, même niveau de langue, ni plus ni moins. Français parlé, courant et naturel, comme on le dirait à l'oral, sans mot à mot ni tournure écrite.
+- Léa : prénom d'une personne présente (une Française), prononcé « Lia ». Dans la transcription, Lia, Li-a, Lê A, Lea, Léa, ou lia, lìa, lía employés comme un nom ou pour appeler quelqu'un (« Lia ơi », « con Lia », « chị Lia », « bé Lia ») désignent Léa : écris « Léa », ne le traduis pas comme un mot vietnamien.
 - N'ajoute ni émotion, ni intensité, ni exclamation, ni juron absents du texte.
 - Mot sans doute mal transcrit : prends le sens le plus vraisemblable d'après la phrase et le contexte, suivi de (?). Passage qui n'a aucun sens : traduis ce qui est sûr et mets […] pour le reste. N'invente rien.
 - Phrases de plusieurs personnes mêlées : traduis séparément chaque morceau compréhensible, séparés par « / », sans les fondre en une seule phrase.
@@ -2305,7 +2407,7 @@ Ta seule tâche : traduire la phrase en français, fidèlement. Tu ne juges pas,
 - Chiffres, sommes, heures, lieux, noms : exacts. À l'oral, les milliers sont souvent sous-entendus (« hai trăm » = 200 000 đ, « năm chục » = 50 000 đ) ; argot : « xị » ou « lít » = 100 000 đ, « củ » = 1 000 000 đ.
 - Sud : hông, hổng = không ; dzậy = vậy ; dzô = vào ; dìa = về ; nè = này ; hồi sáng = sáng nay ; hồi nãy = lúc nãy ; mắc = đắt ; xài = dùng ; kêu = gọi ; tụi = bọn ; bển = bên đó ; « cái quần (què) » = rejet moqueur (« mon œil », « n'importe quoi »).
 - Centre : mô = đâu, tê = kia, ni = này, nớ = đó, răng = sao, rứa = vậy, chi = gì, chừ = bây giờ, mần = làm, nỏ = không, ưng = thích, hắn = nó, mạ = mẹ, o = cô, mệ = bà, nác = nước, trốc = đầu, chộ = thấy.
-- Le contexte précédent sert à comprendre de quoi on parle : ne le retraduis pas.
+- Le fil de la conversation sert à comprendre de quoi on parle et qui s'adresse à qui : ne le retraduis pas. Les lettres entre crochets ([A], [B]…) indiquent qui parle (repérage automatique, parfois faux) : ne les recopie pas.
 - Passages en anglais ou en français : ne les traduis pas. Texte entièrement en anglais ou en français, ou sans parole réelle : réponds uniquement -
 
 Réponds uniquement par la traduction française, sur une ligne, sans guillemets ni étiquette.`;
@@ -2790,22 +2892,57 @@ function ringAudio(a, b, max) {
 const TRANSCRIBE_MODEL = 'gemini-3.5-transcribe';
 const phr = { vocab: true, note: '' };
 
-/** Fin de phrase : son audio part à la transcription (avec 1 s avant le premier mot). */
+let phraseChain = Promise.resolve();
+
+/** Fin de phrase : son audio part à la transcription (avec 1 s avant le premier mot). Les phrases
+ * sont traitées dans l'ordre, pour que les lignes s'affichent dans l'ordre de la conversation. */
 function phraseCut(c) {
   if (!c.speech) return;
-  const samples = ringAudio(Math.max(c.start, c.first - RATE), c.at);
+  const from = Math.max(c.start, c.first - RATE);
+  const samples = ringAudio(from, c.at);
   if (!samples || samples.length < 0.3 * RATE) return;
+  phraseChain = phraseChain.then(() => phraseWindow(c, from, samples)).catch(() => {});
+}
+
+/**
+ * Plusieurs personnes à la suite dans la même phrase : on la coupe là où la voix change (voix
+ * reconnues sur l'appareil), et chacune est transcrite et traduite à part. Pour ne rien perdre
+ * en vitesse, la transcription de la phrase entière part en même temps que ce calcul ; elle
+ * sert s'il n'y a qu'une voix. Une phrase trop courte pour deux tours de parole part directement.
+ */
+async function phraseWindow(c, from, samples) {
+  const audio = toBase64(encodeWAV(samples, RATE));
+  if (c.last - c.first < 3.5 * RATE || !S.voices || voice.state !== 'ready') {
+    phraseLine(audio, null, [c.first, c.last]);
+    return;
+  }
+  const whole = transcribe(audio).then((text) => ({ text }), (err) => ({ err }));
+  const r = await voiceEmbedWait(samples.slice(), 2500);
+  const ids = r && r.list.length ? voiceAssign(r.list) : null;
+  const parts = ids ? speakerParts(samples, ids, r.spans, RATE) : null;
+  phr.split = { windows: ids ? ids.length : 0, voices: ids ? voiceRuns(ids).length : 0, parts: parts ? parts.length : 0 };
+  if (!parts || parts.length < 2) {
+    phraseLine(audio, parts ? parts[0].ids : null, [c.first, c.last], whole);
+    return;
+  }
+  for (const p of parts) {
+    const part = samples.subarray(p.a, p.b);
+    phraseLine(toBase64(encodeWAV(part, RATE)), p.ids, [from + p.a, from + p.b]);
+  }
+}
+
+function phraseLine(audio, ids, span, pending) {
   const line = {
-    id: ++lineSeq, kind: 'phrase', createdAt: Date.now(), audio: toBase64(encodeWAV(samples, RATE)),
-    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false, voiceIds: null, span: [c.first, c.last]
+    id: ++lineSeq, kind: 'phrase', createdAt: Date.now(), audio,
+    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false, voiceIds: ids && ids.length ? ids : null, span
   };
   lines.push(line);
   mountLine(line);
-  transcribePhrase(line);
-  liveVoice(line);
+  transcribePhrase(line, pending);
+  if (!line.voiceIds) liveVoice(line);
 }
 
-async function transcribePhrase(line) {
+async function transcribePhrase(line, pending) {
   if (line.dead || line.transcribing || !line.audio) return;
   if (!S.apiKey) {
     Object.assign(line, { status: 'failed', error: 'Ajoutez votre clé API Gemini dans les réglages.', autoRetry: false });
@@ -2819,7 +2956,14 @@ async function transcribePhrase(line) {
   updateStatus();
   const t0 = performance.now();
   try {
-    const text = await transcribe(line.audio);
+    let text;
+    if (pending) {
+      const r = await pending;   // transcription déjà lancée pour cette phrase
+      if (r.err) throw r.err;
+      text = r.text;
+    } else {
+      text = await transcribe(line.audio);
+    }
     tech.asr = performance.now() - t0;
     if (line.dead) return;
     const vi = String(text || '').replace(/\s+/g, ' ').trim();
@@ -2917,12 +3061,21 @@ function phraseFallback(err) {
 }
 
 function cleanFrench(text) {
-  return String(text || '').replace(/\s*\n+\s*/g, ' ').replace(/^\s*FR\s*[:：]\s*/i, '').replace(/^["«“]\s*|\s*["»”]$/g, '').trim();
+  return String(text || '').replace(/\s*\n+\s*/g, ' ').replace(/^\s*(\[[A-Z]\]\s*)?FR\s*[:：]\s*/i, '').replace(/^\s*\[[A-Z]\]\s*/, '').replace(/^["«“]\s*|\s*["»”]$/g, '').trim();
 }
 
-function translateUserText(context, vi) {
-  const recent = context.length ? 'Contexte récent (ne pas retraduire) :\n' + context.map((c) => 'VI: ' + c.vi + '\nFR: ' + c.fr).join('\n') + '\n\n' : '';
-  return recent + 'Phrase à traduire :\n' + vi;
+/** Lettres des voix d'une ligne (« A », « A+B »), ou ''. */
+function speakerTag(line) {
+  return S.voices && line.voiceIds ? voiceRuns(line.voiceIds).map((id) => voiceLabel(id).letter).join('+') : '';
+}
+
+/** Le fil de la conversation (phrases déjà transcrites, traduites ou non), puis la phrase à traduire. */
+function translateUserText(context, line) {
+  const tag = (who) => (who ? '[' + who + '] ' : '');
+  const thread = context.map((c) => tag(c.who) + 'VI: ' + c.vi + (c.fr ? '\n' + tag(c.who) + 'FR: ' + c.fr : '')).join('\n');
+  const who = speakerTag(line);
+  return (thread ? 'Fil de la conversation (ne pas retraduire) :\n' + thread + '\n\n' : '') +
+    (who ? 'Qui parle : [' + who + ']\n' : '') + 'Phrase à traduire :\n' + line.vi;
 }
 
 /** Traduction d'une phrase transcrite (texte seul : plus rapide qu'avec l'audio). */
@@ -2950,7 +3103,7 @@ async function translateText(line) {
   try {
     const raw = await gemini({
       system: TRANSLATE_PROMPT,
-      text: translateUserText(recentContext(line), vi),
+      text: translateUserText(recentContext(line), { vi, voiceIds: line.voiceIds }),
       maxTokens: 512,
       onText: (text) => {
         if (!first) first = performance.now();
@@ -3023,13 +3176,13 @@ const CUTS = [
     id: 'complete', title: 'Phrases complètes',
     sub: 'Attend une vraie pause avant de traduire : phrases entières, la traduction arrive un peu plus tard (recommandé)',
     tuning: { endSilence: 0.7, maxSegment: 8, cutSearchWindow: 2 },
-    turns: { endSilence: 0.8, softMax: 8, softPause: 0.25, hardMax: 14 }
+    turns: { endSilence: 1.0, softMax: 10, softPause: 0.25, hardMax: 16 }
   },
   {
     id: 'fast', title: 'Rapide',
     sub: 'Traduit dès une courte pause : plus réactif, mais phrases parfois coupées',
     tuning: {},
-    turns: { endSilence: 0.5, softMax: 5, softPause: 0.2, hardMax: 9 }
+    turns: { endSilence: 0.6, softMax: 6, softPause: 0.2, hardMax: 10 }
   }
 ];
 function currentCut() {
