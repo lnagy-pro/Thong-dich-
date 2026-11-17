@@ -13,20 +13,31 @@ Interprète en direct, vietnamien du Centre vers le français, avec Gemini. S'ou
 ## Utilisation
 
 1. Ouvrir la page, coller la clé API Gemini (Réglages), toucher le micro.
-2. Le vietnamien s'écrit en direct pendant qu'on parle ; à chaque pause, la phrase s'affiche traduite, avec une lettre de couleur par personne (A, B, C…). L'anglais et le français ne sont pas traduits.
+2. Le vietnamien s'écrit en direct pendant qu'on parle ; à chaque vraie pause, la phrase entière s'affiche traduite, avec une lettre de couleur par personne (A, B, C…). L'anglais et le français ne sont pas traduits.
 3. Micro : celui de l'iPhone entend les voix autour de soi. Poser le téléphone entre les personnes, le bas (où est le micro) tourné vers elles. Les micros des AirPods visent la bouche de la personne qui les porte et entendent mal les autres.
 4. Réglages › Infos techniques indique l'état de l'écoute, la connexion à Gemini, l'audio, le gain du micro et la reconnaissance des voix.
 
 ## Deux modes d'écoute
 
-- **Continue (par défaut)** : le micro part en continu vers Gemini 3.5 Transcribe Live (WebSocket, PCM 16 kHz), qui transcrit au fil de la parole. Chaque phrase finale est traduite en texte par Gemini Flash, avec le contexte des phrases précédentes. Les sessions durent 10 minutes au plus : la suivante s'ouvre avant, sans coupure ; en cas de coupure réseau, l'audio est gardé et renvoyé.
+- **Continue (par défaut)** : le micro part en continu vers Gemini 3.5 Transcribe Live (WebSocket, PCM 16 kHz), qui transcrit au fil de la parole. C'est l'app qui découpe les phrases et qui l'indique au serveur (activité manuelle : `activityStart` / `activityEnd`). La détection de parole de Google est coupée : faite pour quelqu'un qui parle à son téléphone, elle ignorait les voix éloignées et coupait les phrases à la moindre hésitation. Chaque phrase est traduite en entier par Gemini Flash, en texte, avec le contexte des phrases précédentes. Le serveur reçoit aussi une liste de mots du Centre et du Sud à bien reconnaître.
+  - Les sessions durent 10 minutes au plus : la suivante s'ouvre avant et prend le relais entre deux phrases. En cas de coupure réseau, l'audio est gardé et renvoyé.
+  - Si le serveur refuse ces options, l'app retire d'abord la liste de mots, puis revient à la détection de Google (les morceaux qu'elle renvoie sont alors regroupés par phrase). Elle y revient aussi si le serveur ne répond à aucune phrase. Réglages › Infos techniques indique qui découpe les phrases.
 - **Par extraits** : l'ancien mode. L'app découpe la parole en phrases et envoie chaque extrait audio à Gemini, qui transcrit et traduit d'un coup. Utilisé automatiquement si l'écoute continue est refusée.
+
+## Découpage des phrases (Réglages)
+
+| Réglage | Fin de phrase | Long monologue |
+|---|---|---|
+| **Phrases complètes** (par défaut) | après 0,8 s de silence | coupé à la première petite pause passé 8 s, au plus tard à 14 s |
+| **Rapide** | après 0,5 s de silence | coupé à la première petite pause passé 5 s, au plus tard à 9 s |
+
+Une hésitation plus courte reste dans la même phrase. En mode par extraits, les mêmes réglages attendent 0,7 s ou 0,45 s de silence.
 
 ## Voix lointaines
 
 Le micro est pris brut, sans le traitement d'iOS (qui vise la voix de la personne qui tient le téléphone). Une voix à deux ou trois mètres arrive donc 20 à 30 dB plus bas qu'une voix collée au micro.
 
-- **Écoute continue** : un gain automatique ramène la parole vers un niveau constant avant l'envoi, jusqu'à +30 dB. Il ne suit que la parole : figé pendant les silences, il ne fait pas monter le bruit. Il baisse tout de suite sur une voix forte, et un limiteur doux évite la saturation. Une voix faible qui répond à une voix forte est remontée en moins d'une seconde de parole.
+- **Écoute continue** : tout le son de chaque phrase est transcrit, sans tri par la détection de Google. Un gain automatique ramène la parole vers un niveau constant avant l'envoi, jusqu'à +30 dB. Il ne suit que la parole : figé pendant les silences, il ne fait pas monter le bruit. Il baisse tout de suite sur une voix forte, et un limiteur doux évite la saturation. Une voix faible qui répond à une voix forte est remontée en moins d'une seconde de parole.
 - **Par extraits** : chaque phrase est normalisée avant l'envoi (×16 au plus).
 
 ## Confidentialité
@@ -39,7 +50,7 @@ Le micro est pris brut, sans le traitement d'iOS (qui vise la voix de la personn
 
 | Dossier | Contenu |
 |---|---|
-| `src/` | Sources de la web app : `dsp.js` (son : rééchantillonnage, découpage, gain automatique), `voice.js` (reconnaissance des voix), `app.js`, `style.css`, `index.html` |
+| `src/` | Sources de la web app : `dsp.js` (son : rééchantillonnage, découpage des phrases, gain automatique, chaîne du micro), `voice.js` (reconnaissance des voix), `app.js`, `style.css`, `index.html` |
 | `build.py` | Assemble `index.html` à partir de `src/` |
 | `ios/` | L'app iPhone native (SwiftUI) d'origine. Son prompt (`TranslationPrompt.swift`) et son icône servent aussi à la web app |
 
