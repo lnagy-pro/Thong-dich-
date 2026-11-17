@@ -267,6 +267,78 @@ function voiceRuns(ids) {
   return runs;
 }
 
+/**
+ * Tours de parole d'une phrase : on coupe là où la voix change, au point le plus calme entre les
+ * deux voix, pour traduire chaque personne à part. Un tour d'une seule fenêtre (≈ 1,5 s : « ừ »,
+ * « dạ ») reste avec ses voisins, et aucune partie ne fait moins d'une seconde.
+ * ids : voix de chaque fenêtre (null = inconnue) ; spans : [début, fin] de chaque fenêtre, en
+ * échantillons de x. Rend [{a, b, ids}] : une seule partie s'il n'y a rien à couper.
+ */
+function speakerParts(x, ids, spans, rate) {
+  const whole = [{ a: 0, b: x.length, ids: ids.slice() }];
+  if (ids.length < 4 || spans.length !== ids.length) return whole;
+  // Suites de fenêtres de la même voix ; une fenêtre inconnue suit le tour en cours.
+  const runs = [];
+  ids.forEach((id, i) => {
+    const last = runs[runs.length - 1];
+    if (last && (id === null || id === last.id)) last.idx.push(i);
+    else if (id !== null) runs.push({ id, idx: [i] });
+  });
+  const count = (r) => r.idx.filter((i) => ids[i] === r.id).length;
+  const turns = [];
+  for (const r of runs) {
+    const prev = turns[turns.length - 1];
+    if (prev && (prev.id === r.id || count(r) < 2)) prev.idx.push(...r.idx);
+    else turns.push({ id: r.id, idx: r.idx.slice() });
+  }
+  if (turns.length > 1 && count(turns[0]) < 2) {
+    turns[1].idx = turns[0].idx.concat(turns[1].idx);
+    turns.shift();
+  }
+  if (turns.length < 2) return whole;
+  const center = (i) => (spans[i][0] + spans[i][1]) / 2;
+  const bounds = [0];
+  for (let k = 0; k + 1 < turns.length; k++) {
+    const own = (t) => t.idx.filter((i) => ids[i] === t.id);
+    const c0 = center(Math.max.apply(null, own(turns[k]))), c1 = center(Math.min.apply(null, own(turns[k + 1])));
+    const lo = Math.max(0, Math.min(c0, c1) - 0.25 * rate), hi = Math.min(x.length, Math.max(c0, c1) + 0.25 * rate);
+    bounds.push(quietest(x, lo, hi));
+  }
+  bounds.push(x.length);
+  // Une partie de moins d'une seconde rejoint sa voisine la plus courte (la coupe est retirée).
+  for (let k = 0; bounds.length > 2 && k + 1 < bounds.length;) {
+    if (bounds[k + 1] - bounds[k] >= rate) { k++; continue; }
+    const last = bounds.length - 2;
+    const drop = k === 0 ? 1 : k === last ? k : (bounds[k] - bounds[k - 1] <= bounds[k + 2] - bounds[k + 1] ? k : k + 1);
+    bounds.splice(drop, 1);
+    k = 0;
+  }
+  if (bounds.length <= 2) return whole;
+  const parts = [];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const a = bounds[k], b = bounds[k + 1];
+    const own = ids.filter((id, i) => center(i) >= a && center(i) < b);
+    // Voix principale de la partie (les fenêtres à cheval sur la coupe portent parfois la voisine).
+    const tally = new Map();
+    for (const id of own) if (id !== null) tally.set(id, (tally.get(id) || 0) + 1);
+    let main = null, most = 0, known = 0;
+    for (const [id, n] of tally) { known += n; if (n > most) { most = n; main = id; } }
+    parts.push({ a, b, ids: main !== null && most >= 0.6 * known ? [main] : own });
+  }
+  return parts;
+}
+
+/** Milieu de la tranche de 20 ms la plus calme entre lo et hi (échantillons à 16 kHz). */
+function quietest(x, lo, hi) {
+  let best = Math.round((lo + hi) / 2), min = Infinity;
+  for (let s = Math.round(lo); s + 320 <= hi; s += 160) {
+    let e = 0;
+    for (let k = s; k < s + 320; k++) e += x[k] * x[k];
+    if (e < min) { min = e; best = s + 160; }
+  }
+  return best;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { Fbank, voicedPart, VoiceClusters, voiceRuns };
+  module.exports = { Fbank, voicedPart, VoiceClusters, voiceRuns, speakerParts, quietest };
 }
