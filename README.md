@@ -13,16 +13,19 @@ Interprète en direct, vietnamien du Centre vers le français, avec Gemini. S'ou
 ## Utilisation
 
 1. Ouvrir la page, coller la clé API Gemini (Réglages), toucher le micro.
-2. Le vietnamien s'écrit en direct pendant qu'on parle ; à chaque vraie pause, la phrase entière s'affiche traduite, avec une lettre de couleur par personne (A, B, C…). L'anglais et le français ne sont pas traduits.
+2. À chaque vraie pause, la phrase entière s'affiche, traduite, avec une lettre de couleur par personne (A, B, C…). L'anglais et le français ne sont pas traduits.
 3. Micro : celui de l'iPhone entend les voix autour de soi. Poser le téléphone entre les personnes, le bas (où est le micro) tourné vers elles. Les micros des AirPods visent la bouche de la personne qui les porte et entendent mal les autres.
 4. Réglages › Infos techniques indique l'état de l'écoute, la connexion à Gemini, l'audio, le gain du micro et la reconnaissance des voix.
 
-## Deux modes d'écoute
+## Trois modes d'écoute
 
-- **Continue (par défaut)** : le micro part en continu vers Gemini 3.5 Transcribe Live (WebSocket, PCM 16 kHz), qui transcrit au fil de la parole. C'est l'app qui découpe les phrases et qui l'indique au serveur (activité manuelle : `activityStart` / `activityEnd`). La détection de parole de Google est coupée : faite pour quelqu'un qui parle à son téléphone, elle ignorait les voix éloignées et coupait les phrases à la moindre hésitation. Chaque phrase est traduite en entier par Gemini Flash, en texte, avec le contexte des phrases précédentes. Le serveur reçoit aussi une liste de mots du Centre et du Sud à bien reconnaître.
+- **Phrase par phrase (par défaut)** : l'app découpe la conversation en phrases, bout à bout, sans trou entre elles. Chaque phrase parlée part en entier vers Gemini 3.5 Transcribe (`generateContent`, audio WAV 16 kHz dans la requête, avec une liste de mots du Centre et du Sud). Une requête indépendante par phrase : rien n'est perdu entre deux phrases, et le modèle entend toute la phrase. La transcription est ensuite traduite en texte par Gemini Flash, avec le contexte des phrases précédentes. Si la liste de mots est refusée, l'app la retire ; si le modèle est indisponible, elle passe au mode par extraits.
+- **En direct** : le micro part en continu vers Gemini 3.5 Transcribe Live (WebSocket), qui écrit le vietnamien pendant qu'on parle. L'app découpe les phrases et l'indique au serveur (activité manuelle : `activityStart` / `activityEnd`), la détection de parole de Google étant coupée. Plus réactif, mais le serveur peut manquer le début d'une phrase juste après une pause.
   - Les sessions durent 10 minutes au plus : la suivante s'ouvre avant et prend le relais entre deux phrases. En cas de coupure réseau, l'audio est gardé et renvoyé.
-  - Si le serveur refuse ces options, l'app retire d'abord la liste de mots, puis revient à la détection de Google (les morceaux qu'elle renvoie sont alors regroupés par phrase). Elle y revient aussi si le serveur ne répond à aucune phrase. Réglages › Infos techniques indique qui découpe les phrases.
-- **Par extraits** : l'ancien mode. L'app découpe la parole en phrases et envoie chaque extrait audio à Gemini, qui transcrit et traduit d'un coup. Utilisé automatiquement si l'écoute continue est refusée.
+  - Si le serveur refuse ces options, l'app retire d'abord la liste de mots, puis revient à la détection de Google (les morceaux qu'elle renvoie sont alors regroupés par phrase). Elle y revient aussi si le serveur ne répond à aucune phrase.
+- **Par extraits** : l'ancien mode. Chaque phrase est envoyée en audio à Gemini Flash, qui transcrit et traduit d'un coup. Utilisé automatiquement si les autres modes sont indisponibles.
+
+Réglages › Infos techniques indique le mode utilisé, et pourquoi il a changé le cas échéant.
 
 ## Découpage des phrases (Réglages)
 
@@ -31,18 +34,18 @@ Interprète en direct, vietnamien du Centre vers le français, avec Gemini. S'ou
 | **Phrases complètes** (par défaut) | après 0,8 s de silence | coupé à la première petite pause passé 8 s, au plus tard à 14 s |
 | **Rapide** | après 0,5 s de silence | coupé à la première petite pause passé 5 s, au plus tard à 9 s |
 
-Une hésitation plus courte reste dans la même phrase. En mode par extraits, les mêmes réglages attendent 0,7 s ou 0,45 s de silence.
+Une hésitation plus courte reste dans la même phrase. Mêmes réglages en mode phrase par phrase et en direct ; en mode par extraits, ils attendent 0,7 s ou 0,45 s de silence.
 
 ## Voix lointaines
 
 Le micro est pris brut, sans le traitement d'iOS (qui vise la voix de la personne qui tient le téléphone). Une voix à deux ou trois mètres arrive donc 20 à 30 dB plus bas qu'une voix collée au micro.
 
-- **Écoute continue** : tout le son de chaque phrase est transcrit, sans tri par la détection de Google. Un gain automatique ramène la parole vers un niveau constant avant l'envoi, jusqu'à +30 dB. Il ne suit que la parole : figé pendant les silences, il ne fait pas monter le bruit. Il baisse tout de suite sur une voix forte, et un limiteur doux évite la saturation. Une voix faible qui répond à une voix forte est remontée en moins d'une seconde de parole.
+- **Phrase par phrase et en direct** : tout le son de chaque phrase est transcrit, sans tri par la détection de Google. Un gain automatique ramène la parole vers un niveau constant avant l'envoi, jusqu'à +30 dB. Il ne suit que la parole : figé pendant les silences, il ne fait pas monter le bruit. Il baisse tout de suite sur une voix forte, et un limiteur doux évite la saturation. Une voix faible qui répond à une voix forte est remontée en moins d'une seconde de parole.
 - **Par extraits** : chaque phrase est normalisée avant l'envoi (×16 au plus).
 
 ## Confidentialité
 
-- La clé reste dans le navigateur et n'est envoyée qu'à Google (en-tête HTTPS, ou paramètre de la connexion WebSocket de l'écoute continue). La page n'autorise aucune autre connexion (CSP stricte), hormis le chargement du moteur ONNX depuis jsDelivr quand le dossier `ort/` est absent.
+- La clé reste dans le navigateur et n'est envoyée qu'à Google (en-tête HTTPS, ou paramètre de la connexion WebSocket du mode en direct). La page n'autorise aucune autre connexion (CSP stricte), hormis le chargement du moteur ONNX depuis jsDelivr quand le dossier `ort/` est absent.
 - La reconnaissance des voix tourne sur l'appareil : rien n'est envoyé pour elle.
 - Pour verrouiller la clé : la restreindre dans Google Cloud au site de la page et à la Generative Language API.
 

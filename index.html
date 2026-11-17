@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-14CaXYsXapu0q/La3n14waj1UbkkfhUVKiIC4ZBx8+4=' 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'sha256-BxRQVYc7Wt/KEvdBtu6pNakLBa4/b3q5r8MsGTIOv+s='; img-src data:; connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://cdn.jsdelivr.net; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Yh4HXFj57EG140ccu+p650aUxR+xBQe/8SoHYyJjNiI=' 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'sha256-BxRQVYc7Wt/KEvdBtu6pNakLBa4/b3q5r8MsGTIOv+s='; img-src data:; connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://cdn.jsdelivr.net; worker-src blob:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Thông Dịch</title>
 <meta name="description" content="Interprète en direct : vietnamien du Centre vers le français, avec Gemini.">
@@ -600,7 +600,7 @@ input[type="password"], input[type="text"], select {
         <div class="panel"><dl id="techInfo"></dl></div>
       </section>
 
-      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.2</p>
+      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.3</p>
     </div>
   </section>
 </div>
@@ -1516,7 +1516,7 @@ const S = {
   priority: store.get('priority', true),
   showVi: store.get('showVi', true),
   cut: store.get('cut', 'complete'),
-  engine: store.get('engine', 'live'),
+  listen: store.get('listen', 'phrases'),
   micId: store.get('micId', ''),
   micLabel: store.get('micLabel', ''),
   voices: store.get('voices', true)
@@ -1543,7 +1543,7 @@ const CONFIGS = [
   { api: 'generate', tier: false, safety: false, thinking: false, label: 'generateContent (simplifiée)' }
 ];
 let cfgIndex = 0;
-const tech = { note: '', mode: '', rate: 0, gain: null, ttfb: null, total: null, probe: null };
+const tech = { note: '', mode: '', rate: 0, gain: null, asr: null, ttfb: null, total: null, probe: null };
 
 class GemError extends Error {
   constructor(kind, message, status) {
@@ -2087,13 +2087,14 @@ function removeLine(line) {
 function retryLine(line) {
   if (line.status !== 'failed') return;
   if (line.kind === 'live') translateText(line);
+  else if (line.kind === 'phrase') { if (line.vi) translateText(line); else transcribePhrase(line); }
   else translate(line);
 }
 
 /** Le réseau est revenu : on relance les phrases perdues pendant la coupure. */
 function retryFailed() {
   for (const line of lines) {
-    if (line.status === 'failed' && line.autoRetry && (line.kind === 'live' || line.audio)) retryLine(line);
+    if (line.status === 'failed' && line.autoRetry && (line.kind === 'live' || line.kind === 'phrase' || line.audio)) retryLine(line);
   }
 }
 window.addEventListener('online', retryFailed);
@@ -2311,7 +2312,7 @@ Réponds uniquement par la traduction française, sur une ligne, sans guillemets
 
 let engine = 'clips';
 const live = {
-  on: false, current: null, next: null, sessions: new Set(), queue: [], ring: [], pos: 0,
+  on: false, current: null, next: null, sessions: new Set(), queue: [],
   worked: false, retries: 0, state: 'off', error: '', note: '',
   level: 0, heard: false, misses: 0,
   win: null, wins: [], winSeq: 0, switchWithin: 20000,
@@ -2345,7 +2346,7 @@ function liveStart() {
   for (const old of live.sessions) { old.closing = true; try { old.ws.close(); } catch (e) { /* déjà fermée */ } }
   clearTimeout(live.switchTimer);
   Object.assign(live, {
-    on: true, current: null, next: null, queue: [], ring: [], pos: 0, worked: false, retries: 0,
+    on: true, current: null, next: null, queue: [], worked: false, retries: 0,
     state: 'connecting', error: '', note: '', heard: false, misses: 0, wins: []
   });
   live.win = winOpen(0);
@@ -2437,9 +2438,6 @@ function liveBegin(session) {
 
 /** Morceau d'audio venu du micro (100 ms, ou moins juste avant une fin de phrase). */
 function liveSend(chunk) {
-  live.ring.push(chunk);
-  while (live.ring.length && chunk.end - live.ring[0].end > 90 * RATE) live.ring.shift();   // 90 s pour la couleur des voix
-  live.pos = chunk.end;
   if (!live.on) return;
   live.queue.push(chunk);
   if (live.queue.length > 400) live.queue.shift();   // ~30 s au plus pendant une reconnexion
@@ -2593,7 +2591,7 @@ function liveFallback(reason) {
     const last = seg.flush();
     if (last) enqueue(last);
   }
-  showBanner('Écoute continue indisponible (' + reason + "). L'app traduit par extraits, comme avant.");
+  showBanner('Écoute en direct indisponible (' + reason + "). L'app traduit par extraits, comme avant.");
   updateStatus();
 }
 
@@ -2683,7 +2681,7 @@ function winSeal(w) {
 }
 
 function winSpan(w) {
-  return [w.first >= 0 ? w.first : w.start, w.last >= 0 ? w.last : (w.end === null ? live.pos : w.end)];
+  return [w.first >= 0 ? w.first : w.start, w.last >= 0 ? w.last : (w.end === null ? ring.pos : w.end)];
 }
 
 /** Fenêtre d'une transcription : par ses horodatages, sinon par l'ordre d'arrivée. */
@@ -2695,7 +2693,7 @@ function winFor(session, tr) {
     const mid = session.base + Math.round((a + b) / 2 * RATE);
     const hit = pending.find((w) => mid >= w.start && mid < w.end);
     if (hit) return hit;
-    if (open && mid >= open.start && mid <= live.pos + RATE) return open;
+    if (open && mid >= open.start && mid <= ring.pos + RATE) return open;
   }
   // Sans horodatage utilisable : la plus ancienne phrase finie qui attend encore sa transcription
   // (en activité manuelle, le serveur ne transcrit qu'en fin de phrase), sinon la phrase en cours.
@@ -2749,20 +2747,173 @@ function liveMiss() {
 /** Audio d'une phrase, retrouvé dans les 90 dernières secondes, pour la couleur de la voix. */
 function liveVoice(line) {
   if (!S.voices || !voice.worker || voice.state === 'error' || line.voiceSent || !line.span) return;
-  const a = Math.max(0, line.span[0] - Math.round(0.15 * RATE));
-  const b = Math.min(live.pos, line.span[1] + Math.round(0.15 * RATE));
-  if (b - a < 0.6 * RATE) return;
-  const out = new Float32Array(Math.min(b - a, 20 * RATE));
-  let filled = 0;
-  for (const c of live.ring) {
-    const cs = c.end - c.data.length;
-    if (c.end <= a || cs >= b) continue;
-    for (let i = Math.max(a, cs); i < Math.min(b, c.end) && i - a < out.length; i++) { out[i - a] = c.data[i - cs] / 32768; filled++; }
-  }
-  if (filled >= 0.6 * RATE) {
+  const out = ringAudio(line.span[0] - Math.round(0.15 * RATE), line.span[1] + Math.round(0.15 * RATE), 20 * RATE);
+  if (out && out.length >= 0.6 * RATE) {
     line.voiceSent = true;
     voiceEmbed(line, out);
   }
+}
+
+// ─── Mémoire audio commune ───────────────────────────────────────────────────
+// Les 90 dernières secondes envoyées par le micro (PCM 16 kHz, après gain automatique), pour la
+// couleur des voix et l'audio de chaque phrase. Positions en échantillons depuis le début de l'écoute.
+const ring = { chunks: [], pos: 0 };
+function ringPush(chunk) {
+  ring.chunks.push(chunk);
+  while (ring.chunks.length && chunk.end - ring.chunks[0].end > 90 * RATE) ring.chunks.shift();
+  ring.pos = chunk.end;
+}
+function ringReset() { ring.chunks = []; ring.pos = 0; }
+/** Échantillons [a, b) encore en mémoire (au plus `max`, depuis le début), ou null. */
+function ringAudio(a, b, max) {
+  a = Math.max(0, Math.round(a));
+  b = Math.min(ring.pos, Math.round(b));
+  if (max && b - a > max) b = a + max;
+  if (b <= a) return null;
+  const out = new Float32Array(b - a);
+  let filled = 0;
+  for (const c of ring.chunks) {
+    const cs = c.end - c.data.length;
+    if (c.end <= a || cs >= b) continue;
+    const from = Math.max(a, cs), to = Math.min(b, c.end);
+    for (let i = from; i < to; i++) out[i - a] = c.data[i - cs] / 32768;
+    filled += to - from;
+  }
+  return filled ? out : null;
+}
+
+// ─── Phrase par phrase : Gemini 3.5 Transcribe ───────────────────────────────
+// L'app découpe la conversation en phrases (fenêtres de Turns, bout à bout, sans trou). Chaque
+// phrase parlée part en entier vers le modèle de transcription : une requête indépendante par
+// phrase, donc rien n'est perdu entre deux phrases, et le modèle entend la phrase entière. Sa
+// transcription est ensuite traduite en texte. Si le modèle est indisponible : mode par extraits.
+const TRANSCRIBE_MODEL = 'gemini-3.5-transcribe';
+const phr = { vocab: true, note: '' };
+
+/** Fin de phrase : son audio part à la transcription (avec 1 s avant le premier mot). */
+function phraseCut(c) {
+  if (!c.speech) return;
+  const samples = ringAudio(Math.max(c.start, c.first - RATE), c.at);
+  if (!samples || samples.length < 0.3 * RATE) return;
+  const line = {
+    id: ++lineSeq, kind: 'phrase', createdAt: Date.now(), audio: toBase64(encodeWAV(samples, RATE)),
+    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false, voiceIds: null, span: [c.first, c.last]
+  };
+  lines.push(line);
+  mountLine(line);
+  transcribePhrase(line);
+  liveVoice(line);
+}
+
+async function transcribePhrase(line) {
+  if (line.dead || line.transcribing || !line.audio) return;
+  if (!S.apiKey) {
+    Object.assign(line, { status: 'failed', error: 'Ajoutez votre clé API Gemini dans les réglages.', autoRetry: false });
+    render(line);
+    return;
+  }
+  line.transcribing = true;
+  Object.assign(line, { status: 'waiting', error: '', autoRetry: false });
+  render(line);
+  inFlight++;
+  updateStatus();
+  const t0 = performance.now();
+  try {
+    const text = await transcribe(line.audio);
+    tech.asr = performance.now() - t0;
+    if (line.dead) return;
+    const vi = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!vi || isNoiseOnly(vi)) { removeLine(line); return; }   // bruit, silence : rien à traduire
+    line.vi = vi;
+    line.audio = null;
+    render(line);
+    translateText(line);
+    retryFailed();
+  } catch (err) {
+    if (line.dead) return;
+    if (err.fallback) { line.transcribing = false; phraseFallback(err); return; }
+    Object.assign(line, { status: 'failed', error: errorMessage(err), autoRetry: isTransient(err) || isKeyError(err) });
+    render(line);
+    if (isKeyError(err)) showBanner(errorMessage(err));
+  } finally {
+    line.transcribing = false;
+    inFlight--;
+    updateStatus();
+  }
+}
+
+/** Transcription d'une phrase, avec nouvelles tentatives ; liste de mots retirée si refusée. */
+async function transcribe(audio) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await transcribeOnce(audio, phr.vocab);
+    } catch (err) {
+      if (err.kind === 'http' && !isKeyError(err) && (err.status === 400 || err.status === 404)) {
+        if (err.status === 400 && phr.vocab) {
+          phr.vocab = false;
+          phr.note = 'liste de mots refusée (' + err.message.slice(0, 120) + ')';
+          attempt--;
+          continue;
+        }
+        err.fallback = true;   // modèle ou requête refusés : on passe au mode par extraits
+        throw err;
+      }
+      if (attempt >= 3 || !isTransient(err)) throw err;
+      await sleep(err.status === 429 ? 1500 * attempt : 400 * attempt);
+    }
+  }
+}
+
+async function transcribeOnce(audio, vocab) {
+  const config = { languageCodes: ['vi-VN', 'en-US'] };
+  if (vocab) config.customVocabulary = LIVE_VOCAB;
+  const body = {
+    contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: audio } }] }],
+    generationConfig: { audioTranscriptionConfig: config }
+  };
+  const ctl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, 25000);
+  let res, raw;
+  try {
+    res = await fetch(API + '/models/' + TRANSCRIBE_MODEL + ':generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.apiKey },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+      cache: 'no-store'
+    });
+    raw = await res.text();
+  } catch (e) {
+    throw new GemError(timedOut ? 'timeout' : 'network', e && e.message);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new GemError('http', errorText(raw), res.status);
+  let json;
+  try { json = JSON.parse(raw); } catch (e) { throw new GemError('stream', 'réponse illisible'); }
+  const c = json.candidates && json.candidates[0];
+  if (!c && json.promptFeedback && json.promptFeedback.blockReason) throw new GemError('stream', 'contenu bloqué (' + json.promptFeedback.blockReason + ')');
+  const parts = c && c.content && Array.isArray(c.content.parts) ? c.content.parts : [];
+  return parts.filter((p) => typeof p.text === 'string' && !p.thought).map((p) => p.text).join(' ');
+}
+
+/** Modèle de transcription indisponible : les phrases en attente et la suite passent par extraits. */
+function phraseFallback(err) {
+  if (engine === 'phrases') {
+    engine = 'clips';
+    capCommand({ type: 'stream', on: false });
+    showBanner('Gemini 3.5 Transcribe indisponible (' + err.message.slice(0, 120) + "). L'app traduit par extraits.");
+  }
+  phr.note = 'transcription indisponible (' + err.message.slice(0, 120) + ')';
+  for (const line of lines.slice()) {
+    if (line.kind === 'phrase' && !line.vi && line.audio && !line.dead && !line.transcribing) {
+      line.kind = 'clip';
+      translate(line);
+    }
+  }
+  updateStatus();
+  if (!sheet.hidden) renderTech();
 }
 
 function cleanFrench(text) {
@@ -2910,9 +3061,9 @@ function onCapture(msg) {
   cap.lastAudio = performance.now();
   if (document.hidden) heardWhileHidden = true;
   if (msg.type === 'level') { setLevel(msg.v); tech.gain = msg.gain; }
-  else if (msg.type === 'pcm') liveSend(msg);
-  else if (msg.type === 'cut') liveCut(msg);
-  else if (msg.type === 'speech') liveSpeech(msg);
+  else if (msg.type === 'pcm') { ringPush(msg); if (engine === 'live') liveSend(msg); }
+  else if (msg.type === 'cut') { if (engine === 'live') liveCut(msg); else if (engine === 'phrases') phraseCut(msg); }
+  else if (msg.type === 'speech') { if (engine === 'live') liveSpeech(msg); }
   else if (msg.type === 'segment') { if (engine === 'clips') enqueue(msg.samples); }
   else if (msg.type === 'flushed') {
     const done = flushWaiters.get(msg.id);
@@ -2960,7 +3111,7 @@ async function buildGraph(ctx) {
       const node = new AudioWorkletNode(ctx, 'td-capture', {
         numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
         channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers',
-        processorOptions: { tuning: currentTuning(), turns: currentTurns(), stream: engine === 'live' }
+        processorOptions: { tuning: currentTuning(), turns: currentTurns(), stream: engine !== 'clips' }
       });
       node.port.onmessage = (e) => onCapture(e.data);
       node.connect(cap.sink);
@@ -2974,7 +3125,7 @@ async function buildGraph(ctx) {
     // Secours : même traitement, sur le thread principal.
     const sp = ctx.createScriptProcessor(2048, 1, 1);
     const rs = new Resampler(ctx.sampleRate, 16000);
-    const feed = new Capture({ tuning: currentTuning(), turns: currentTurns(), stream: engine === 'live' }, (m) => onCapture(m));
+    const feed = new Capture({ tuning: currentTuning(), turns: currentTurns(), stream: engine !== 'clips' }, (m) => onCapture(m));
     cap.feed = feed;
     sp.onaudioprocess = (e) => {
       if (cap.feed === feed) feed.process(rs.process(e.inputBuffer.getChannelData(0)));
@@ -3036,7 +3187,8 @@ async function startListening() {
     return;
   }
   starting = true;
-  engine = S.engine === 'clips' ? 'clips' : 'live';
+  engine = ENGINES.some((e) => e.id === S.listen) ? S.listen : 'phrases';
+  ringReset();
   updateStatus();
   lockScreen();   // demandé pendant le toucher : Safari l'accorde plus volontiers
   // L'AudioContext doit naître pendant le toucher (règle de Safari), avant toute attente.
@@ -3278,8 +3430,9 @@ $('pasteBtn').addEventListener('click', async () => {
 });
 
 const ENGINES = [
-  { id: 'live', title: 'Continue', sub: "Gemini 3.5 Transcribe écoute sans interruption et écrit le vietnamien au fil de la parole ; l'app coupe les phrases sur les vraies pauses et traduit chacune. Le plus juste (recommandé)." },
-  { id: 'clips', title: 'Par extraits', sub: "L'ancien mode : chaque phrase est envoyée en audio à Gemini, qui transcrit et traduit d'un coup." }
+  { id: 'phrases', title: 'Phrase par phrase', sub: "L'app découpe la conversation en phrases, sans rien laisser de côté. Chaque phrase est transcrite en entier par Gemini 3.5 Transcribe, puis traduite. Le plus fiable (recommandé)." },
+  { id: 'live', title: 'En direct', sub: "Gemini 3.5 Transcribe Live écrit le vietnamien pendant qu'on parle. Plus réactif, mais il peut manquer le début d'une phrase après une pause." },
+  { id: 'clips', title: 'Par extraits', sub: "L'ancien mode : chaque phrase est envoyée en audio à Gemini Flash, qui transcrit et traduit d'un coup." }
 ];
 function renderEngines() {
   const box = $('engineChoices');
@@ -3292,9 +3445,9 @@ function renderEngines() {
     input.name = 'engine';
     input.value = en.id;
     input.id = 'engine-' + en.id;
-    input.checked = en.id === (S.engine === 'clips' ? 'clips' : 'live');
+    input.checked = en.id === (ENGINES.some((e) => e.id === S.listen) ? S.listen : 'phrases');
     input.addEventListener('change', () => {
-      save('engine', en.id);
+      save('listen', en.id);
       $('engineNote').hidden = !listening;
     });
     const text = document.createElement('span');
@@ -3411,13 +3564,15 @@ function seconds(ms) {
 }
 
 function liveStatusText() {
+  if (listening && engine === 'phrases') return 'phrase par phrase · Gemini 3.5 Transcribe' + (phr.vocab ? '' : ' (sans liste de mots)');
   if (engine === 'live' && live.on) {
-    if (live.state === 'connected') return 'continue · Gemini 3.5 Transcribe connecté · phrases découpées par ' + (LIVE_LEVELS[live.level].manual ? "l'app" : 'Google');
-    if (live.state === 'reconnecting') return 'continue · reconnexion (' + live.error + ')';
-    return 'continue · connexion…';
+    if (live.state === 'connected') return 'en direct · Gemini 3.5 Transcribe Live connecté · phrases découpées par ' + (LIVE_LEVELS[live.level].manual ? "l'app" : 'Google');
+    if (live.state === 'reconnecting') return 'en direct · reconnexion (' + live.error + ')';
+    return 'en direct · connexion…';
   }
-  if (live.state === 'error') return 'par extraits (continue indisponible : ' + live.error + ')';
-  return S.engine === 'clips' ? 'par extraits' : 'continue (au démarrage de l\'écoute)';
+  if (live.state === 'error') return 'par extraits (en direct indisponible : ' + live.error + ')';
+  if (phr.note && engine === 'clips' && S.listen === 'phrases') return 'par extraits (' + phr.note + ')';
+  return ({ phrases: 'phrase par phrase', live: 'en direct', clips: 'par extraits' }[S.listen] || 'phrase par phrase') + ' (au démarrage de l\'écoute)';
 }
 
 function voiceStatus() {
@@ -3435,12 +3590,13 @@ function renderTech() {
     ['Connexion', CONFIGS[cfgIndex].label + (S.priority && CONFIGS[cfgIndex].tier ? ' · prioritaire' : '')],
     ['Audio', tech.mode ? tech.mode + ' · ' + tech.rate + ' Hz → 16 kHz' : 'pas encore démarré'],
     ['Gain du micro', typeof tech.gain === 'number' ? (tech.gain >= 0 ? '+' : '−') + Math.abs(Math.round(tech.gain)) + ' dB, automatique' : 'automatique (×16 au plus par phrase)'],
-    ['Dernière phrase', tech.total ? (tech.ttfb ? 'premiers mots ' + seconds(tech.ttfb) + ' · ' : '') + 'complète ' + seconds(tech.total) : '—'],
+    ['Dernière phrase', tech.total ? (tech.asr ? 'transcription ' + seconds(tech.asr) + ' · ' : '') + (tech.ttfb ? 'premiers mots ' + seconds(tech.ttfb) + ' · ' : '') + 'traduction ' + seconds(tech.total) : '—'],
     ['Écran allumé', 'wakeLock' in navigator ? (wakeLock ? 'actif' : 'pendant l\'écoute') : 'non pris en charge'],
     ['Voix', voiceStatus()]
   ];
   if (tech.probe && !tech.probe.ok) rows.push(['Dernier test', errorMessage(tech.probe.err)]);
   if (live.note) rows.push(['Écoute (note)', live.note]);
+  if (phr.note) rows.push(['Transcription (note)', phr.note]);
   if (tech.note) rows.push(['Note', tech.note]);
   const dl = $('techInfo');
   dl.textContent = '';
