@@ -493,7 +493,8 @@ function clearAll() {
   for (const line of lines) { line.dead = true; line.el = null; }
   lines.length = 0;
   voiceReset();
-  live.lastLine = null;
+  if (live.win) live.win.line = null;
+  for (const w of live.wins) w.line = null;
   liveHideInterim();
   linesEl.textContent = '';
   follow = true;
@@ -781,14 +782,30 @@ function renderFrench(el, text, labels) {
 }
 
 // ─── Écoute continue : Gemini 3.5 Transcribe Live ────────────────────────────
-// Le micro part en continu (PCM 16 kHz, morceaux de 100 ms) vers un modèle fait pour la
-// transcription. Il renvoie le vietnamien au fil de la parole, puis une transcription finale
-// à chaque pause, avec sa langue et ses horodatages. Chaque phrase finale est traduite en
-// texte seul. Une session dure au plus 10 minutes : la suivante s'ouvre avant, sans coupure.
+// Le micro part en continu (PCM 16 kHz) vers un modèle fait pour la transcription. C'est l'app
+// qui découpe la parole en phrases (fenêtres closes sur une vraie pause, voir Turns) et qui le
+// dit au serveur (activité manuelle) : la détection de parole de Google, faite pour quelqu'un
+// qui parle à son téléphone, ignorait les voix éloignées et coupait à la moindre hésitation.
+// Chaque fenêtre donne une ligne, traduite en texte seul dès que sa transcription est arrivée.
+// Une session dure au plus 10 minutes : la suivante s'ouvre avant et prend le relais entre deux
+// phrases. Si le serveur refuse ces options, on revient à sa détection, puis au mode par extraits.
 const LIVE_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 const LIVE_MODEL = 'models/gemini-3.5-transcribe-live';
 const LIVE_ROTATE_MS = 9 * 60 * 1000;
 const RATE = 16000;
+// Du plus complet au plus simple : on descend d'un cran si le serveur refuse la configuration.
+const LIVE_LEVELS = [
+  { manual: true, vocab: true },
+  { manual: true, vocab: false },
+  { manual: false, vocab: false }
+];
+// Mots du Centre et du Sud à bien reconnaître (la documentation conseille 100 termes au plus).
+const LIVE_VOCAB = [
+  'mô', 'tê', 'răng', 'rứa', 'chừ', 'mần', 'nỏ', 'ưng', 'mạ', 'mệ', 'nác', 'trốc', 'chộ', 'tau', 'hắn', 'bọ', 'ôn',
+  'đi mô', 'ở mô', 'mần chi', 'nói chi', 'làm chi', 'cái chi', 'chi rứa', 'răng rứa', 'rứa hả', 'rứa thì',
+  'bữa ni', 'chỗ ni', 'cái ni', 'cái nớ', 'bên tê', 'bây chừ', 'mi nói', 'mi đi',
+  'hông', 'hổng', 'dzậy', 'dzô', 'dìa', 'bển', 'ổng', 'bả', 'mắc quá', 'xị', 'củ'
+];
 
 const TRANSLATE_PROMPT = `Tu es traducteur vietnamien → français. On te donne la transcription automatique de ce qui vient d'être dit autour d'une personne qui ne parle pas vietnamien : accent du Sud (Saigon), du Centre ou du Nord, souvent une conversation à plusieurs, avec du bruit. La transcription peut contenir des erreurs.
 
@@ -805,14 +822,17 @@ Ta seule tâche : traduire la phrase en français, fidèlement. Tu ne juges pas,
 - Sud : hông, hổng = không ; dzậy = vậy ; dzô = vào ; dìa = về ; nè = này ; hồi sáng = sáng nay ; hồi nãy = lúc nãy ; mắc = đắt ; xài = dùng ; kêu = gọi ; tụi = bọn ; bển = bên đó ; « cái quần (què) » = rejet moqueur (« mon œil », « n'importe quoi »).
 - Centre : mô = đâu, tê = kia, ni = này, nớ = đó, răng = sao, rứa = vậy, chi = gì, chừ = bây giờ, mần = làm, nỏ = không, ưng = thích, hắn = nó, mạ = mẹ, o = cô, mệ = bà, nác = nước, trốc = đầu, chộ = thấy.
 - Le contexte précédent sert à comprendre de quoi on parle : ne le retraduis pas.
-- Texte en anglais ou en français, ou sans parole réelle : réponds uniquement -
+- Passages en anglais ou en français : ne les traduis pas. Texte entièrement en anglais ou en français, ou sans parole réelle : réponds uniquement -
 
 Réponds uniquement par la traduction française, sur une ligne, sans guillemets ni étiquette.`;
 
 let engine = 'clips';
 const live = {
   on: false, current: null, next: null, sessions: new Set(), queue: [], ring: [], pos: 0,
-  worked: false, retries: 0, state: 'off', error: '', lastLine: null, interimTimer: 0, rotateTimer: 0, seq: 0
+  worked: false, retries: 0, state: 'off', error: '', note: '',
+  level: 0, heard: false, misses: 0,
+  win: null, wins: [], winSeq: 0, switchWithin: 20000,
+  interimTimer: 0, rotateTimer: 0, switchTimer: 0, seq: 0
 };
 
 /** Lettres propres au vietnamien (absentes du français et de l'anglais). */
@@ -833,15 +853,26 @@ function durationSeconds(d) {
   return null;
 }
 
+const wsOpen = (s) => !!(s && s.ws && s.ws.readyState === 1);
+function wsSend(s, msg) {
+  try { if (wsOpen(s)) s.ws.send(JSON.stringify(msg)); } catch (e) { /* fermée : la reconnexion suit */ }
+}
+
 function liveStart() {
   for (const old of live.sessions) { old.closing = true; try { old.ws.close(); } catch (e) { /* déjà fermée */ } }
-  Object.assign(live, { on: true, current: null, next: null, queue: [], ring: [], pos: 0, worked: false, retries: 0, state: 'connecting', error: '', lastLine: null });
+  clearTimeout(live.switchTimer);
+  Object.assign(live, {
+    on: true, current: null, next: null, queue: [], ring: [], pos: 0, worked: false, retries: 0,
+    state: 'connecting', error: '', note: '', heard: false, misses: 0, wins: []
+  });
+  live.win = winOpen(0);
   live.sessions = new Set();
   liveOpen('current');
 }
 
 function liveOpen(role) {
-  const session = { id: ++live.seq, ws: null, ready: false, base: null, closing: false, setupTimer: 0 };
+  const level = LIVE_LEVELS[live.level];
+  const session = { id: ++live.seq, ws: null, ready: false, base: null, closing: false, setupTimer: 0, manual: level.manual, activity: false };
   live.sessions.add(session);
   if (role === 'next') live.next = session; else live.current = session;
   let ws;
@@ -853,13 +884,12 @@ function liveOpen(role) {
   }
   session.ws = ws;
   ws.onopen = () => {
-    ws.send(JSON.stringify({
-      setup: {
-        model: LIVE_MODEL,
-        generationConfig: { responseModalities: ['TEXT'] },
-        inputAudioTranscription: { languageCodes: ['vi-VN', 'en-US'] }
-      }
-    }));
+    const transcription = { languageCodes: ['vi-VN', 'en-US'] };
+    if (level.vocab) transcription.customVocabulary = LIVE_VOCAB;
+    const setup = { model: LIVE_MODEL, generationConfig: { responseModalities: ['TEXT'] }, inputAudioTranscription: transcription };
+    // L'app signale elle-même début et fin de chaque phrase : la détection de Google est coupée.
+    if (level.manual) setup.realtimeInputConfig = { automaticActivityDetection: { disabled: true } };
+    ws.send(JSON.stringify({ setup }));
   };
   ws.onmessage = (e) => {
     if (typeof e.data === 'string') liveMessage(session, e.data);
@@ -882,68 +912,120 @@ function liveMessage(session, text) {
     clearTimeout(session.setupTimer);
     Object.assign(live, { worked: true, retries: 0, state: 'connected', error: '' });
     if (session === live.next) {
-      const old = live.current;
-      live.current = session;
-      live.next = null;
-      if (old) liveEnd(old);
-    }
-    if (session === live.current) {
-      liveFlushQueue();
-      clearTimeout(live.rotateTimer);
-      live.rotateTimer = setTimeout(liveRotate, LIVE_ROTATE_MS);
+      // Relève prête : elle prend la main à la prochaine fin de phrase (au plus tard après un délai).
+      if (!live.current || !live.current.ready || !wsOpen(live.current)) { liveSwitch(); liveFlushQueue(); }
+      else {
+        clearTimeout(live.switchTimer);
+        live.switchTimer = setTimeout(() => { liveSwitch(); liveFlushQueue(); }, live.switchWithin);
+      }
+    } else if (session === live.current) {
+      liveBegin(session);
     }
     updateStatus();
     if (!sheet.hidden) renderTech();
     return;
   }
   if (msg.goAway) {
-    if (session === live.current) liveRotate();
+    if (session === live.current) liveRotate(durationSeconds(msg.goAway.timeLeft));
     return;
   }
   const c = msg.serverContent;
   if (!c) return;
+  live.heard = true;   // le serveur répond : l'activité manuelle fonctionne
   if (c.interimInputTranscription && c.interimInputTranscription.text) liveInterim(c.interimInputTranscription.text);
   if (c.inputTranscription && c.inputTranscription.text) liveFinal(session, c.inputTranscription);
+  if (c.turnComplete && session.manual) {
+    // Activité manuelle : la phrase finie la plus ancienne a reçu toute sa transcription.
+    const w = live.wins.find((x) => !x.sealed && x.line);
+    if (w) winSeal(w);
+  }
 }
 
-/** Morceau de 100 ms venu du micro. */
+/** La session devient celle qui reçoit l'audio. */
+function liveBegin(session) {
+  if (session.manual && !session.activity) {
+    wsSend(session, { realtimeInput: { activityStart: {} } });
+    session.activity = true;
+  }
+  liveFlushQueue();
+  clearTimeout(live.rotateTimer);
+  live.rotateTimer = setTimeout(() => liveRotate(), LIVE_ROTATE_MS);
+}
+
+/** Morceau d'audio venu du micro (100 ms, ou moins juste avant une fin de phrase). */
 function liveSend(chunk) {
   live.ring.push(chunk);
-  if (live.ring.length > 900) live.ring.shift();   // 90 s gardées pour la reconnaissance des voix
+  while (live.ring.length && chunk.end - live.ring[0].end > 90 * RATE) live.ring.shift();   // 90 s pour la couleur des voix
   live.pos = chunk.end;
   if (!live.on) return;
-  const s = live.current;
-  if (s && s.ready && s.ws && s.ws.readyState === 1) liveWrite(s, chunk);
-  else {
-    live.queue.push(chunk);
-    if (live.queue.length > 300) live.queue.shift();   // 30 s au plus pendant une reconnexion
+  live.queue.push(chunk);
+  if (live.queue.length > 400) live.queue.shift();   // ~30 s au plus pendant une reconnexion
+  liveFlushQueue();
+}
+
+/** Envoie l'audio et les fins de phrase en attente, dans l'ordre, à la session courante. */
+function liveFlushQueue() {
+  while (live.queue.length) {
+    const s = live.current;
+    if (!s || !s.ready || !wsOpen(s)) return;
+    const item = live.queue.shift();
+    if (item.cut) liveBoundary(s);
+    else liveWrite(s, item);
   }
 }
 
 function liveWrite(session, chunk) {
   if (session.base === null) session.base = chunk.end - chunk.data.length;
-  session.ws.send(JSON.stringify({
+  wsSend(session, {
     realtimeInput: { audio: { data: toBase64(new Uint8Array(chunk.data.buffer, chunk.data.byteOffset, chunk.data.byteLength)), mimeType: 'audio/pcm;rate=16000' } }
-  }));
+  });
 }
 
-function liveFlushQueue() {
-  const s = live.current;
-  if (!s || !s.ready || !s.ws || s.ws.readyState !== 1) return;
-  while (live.queue.length) liveWrite(s, live.queue.shift());
+/** Fin de phrase côté serveur : on clôt l'activité, puis on en ouvre une autre (ou la relève prend la main). */
+function liveBoundary(s) {
+  if (s.manual && s.activity) {
+    wsSend(s, { realtimeInput: { activityEnd: {} } });
+    s.activity = false;
+  }
+  if (live.next && live.next.ready && wsOpen(live.next)) liveSwitch();
+  else if (s.manual) {
+    wsSend(s, { realtimeInput: { activityStart: {} } });
+    s.activity = true;
+  }
 }
 
 /** Relève avant la limite de 10 minutes (ou à l'annonce du serveur). */
-function liveRotate() {
-  if (!live.on || live.next) return;
+function liveRotate(timeLeft) {
+  if (!live.on) return;
+  live.switchWithin = timeLeft ? Math.max(300, (timeLeft - 1.5) * 1000) : 20000;
+  if (live.next) {
+    if (live.next.ready) { clearTimeout(live.switchTimer); live.switchTimer = setTimeout(() => { liveSwitch(); liveFlushQueue(); }, live.switchWithin); }
+    return;
+  }
   liveOpen('next');
+}
+
+function liveSwitch() {
+  const next = live.next;
+  if (!next || !next.ready) return;
+  clearTimeout(live.switchTimer);
+  const old = live.current;
+  live.current = next;
+  live.next = null;
+  if (old) liveEnd(old);
+  liveBegin(next);
 }
 
 /** Fin propre : le serveur finalise la phrase en cours, puis la session se ferme. */
 function liveEnd(session) {
   if (session.closing) return;
   session.closing = true;
-  try { if (session.ws && session.ws.readyState === 1) session.ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } })); } catch (e) { /* fermée */ }
+  if (session.manual) {
+    if (session.activity) wsSend(session, { realtimeInput: { activityEnd: {} } });
+    session.activity = false;
+  } else {
+    wsSend(session, { realtimeInput: { audioStreamEnd: true } });
+  }
   setTimeout(() => { try { session.ws.close(1000, 'fin'); } catch (e) { /* fermée */ } }, 3000);
 }
 
@@ -954,13 +1036,25 @@ function liveClosed(session, e) {
   const reason = (e && e.reason) || ('fermeture ' + ((e && e.code) || '?'));
   if (session === live.next) {
     live.next = null;
-    setTimeout(liveRotate, 5000);
+    setTimeout(() => liveRotate(), 5000);
     return;
   }
   if (session !== live.current) return;
   live.current = null;
-  // Refusé dès l'ouverture (modèle indisponible, clé…) : retour au mode par extraits.
-  if (!session.ready && !live.worked) { liveFallback(reason); return; }
+  if (!session.ready && !live.worked) {
+    // Refusé dès l'ouverture : on retire d'abord les options (vocabulaire, activité manuelle),
+    // puis on passe au mode par extraits si le modèle lui-même est indisponible.
+    const config = /realtime|activity|vocabular|unknown name|cannot find field|unrecognized|invalid json/i.test(reason);
+    const fatal = !config && /not found|not supported|permission|api.?key|unauthenticated|billing|quota|exhausted/i.test(reason);
+    if (!fatal && live.level < LIVE_LEVELS.length - 1) {
+      live.level++;
+      live.note = 'option refusée par le serveur (' + reason + ')';
+      liveOpen('current');
+      return;
+    }
+    liveFallback(reason);
+    return;
+  }
   if (++live.retries > 4) { liveFallback(reason); return; }
   Object.assign(live, { state: 'reconnecting', error: reason });
   updateStatus();
@@ -978,6 +1072,20 @@ function liveEnsure() {
   }
 }
 
+/** Nouvelle session au niveau courant (après un changement de niveau). */
+function liveReconnect() {
+  for (const s of [live.current, live.next]) {
+    if (!s) continue;
+    s.closing = true;
+    live.sessions.delete(s);
+    try { s.ws.close(1000, 'changement de réglage'); } catch (e) { /* fermée */ }
+  }
+  clearTimeout(live.switchTimer);
+  live.current = null;
+  live.next = null;
+  liveOpen('current');
+}
+
 function liveFallback(reason) {
   live.on = false;
   Object.assign(live, { state: 'error', error: reason });
@@ -986,11 +1094,12 @@ function liveFallback(reason) {
   live.current = null;
   live.next = null;
   clearTimeout(live.rotateTimer);
+  clearTimeout(live.switchTimer);
   liveHideInterim();
   engine = 'clips';
-  if (cap.node) cap.node.port.postMessage({ type: 'stream', on: false });
+  capCommand({ type: 'stream', on: false });
   // L'audio pas encore transcrit passe par le découpage habituel : rien n'est perdu.
-  const pending = live.queue.splice(0);
+  const pending = live.queue.splice(0).filter((c) => c.data);
   if (pending.length) {
     const seg = new Segmenter(currentTuning());
     for (const c of pending) {
@@ -1006,13 +1115,18 @@ function liveFallback(reason) {
 }
 
 async function liveStop() {
-  live.on = false;
   clearTimeout(live.rotateTimer);
+  clearTimeout(live.switchTimer);
+  if (live.on) await flushCapture();   // la phrase en cours est close et part au serveur
+  live.on = false;
   liveHideInterim();
   const s = live.current;
-  if (s && s.ready && s.ws && s.ws.readyState === 1) {
+  if (s && s.ready && wsOpen(s)) {
     liveEnd(s);
-    await sleep(1500);   // laisse arriver la dernière phrase
+    // Laisse arriver la dernière transcription (2,5 s au plus).
+    const t0 = performance.now();
+    while (performance.now() - t0 < 2500 && live.wins.some((w) => w.speech && !w.line && !w.sealed)) await sleep(100);
+    await sleep(300);
   }
   for (const x of live.sessions) { x.closing = true; try { x.ws.close(1000, 'fin'); } catch (e) { /* fermée */ } }
   live.sessions = new Set();
@@ -1039,55 +1153,133 @@ function liveHideInterim() {
   emptyEl.hidden = linesEl.children.length > 0;
 }
 
+// ─── Phrases (fenêtres) ──────────────────────────────────────────────────────
+// Une fenêtre va d'une fin de phrase à la suivante (positions en échantillons, depuis le début
+// de l'écoute). Toutes les transcriptions qui y tombent forment une seule ligne.
+function winOpen(start) {
+  return { id: ++live.winSeq, start, end: null, first: -1, last: -1, voiced: 0, speech: false, line: null, closedAt: 0, sealed: false, timer: 0 };
+}
+
+/** La parole a commencé dans la fenêtre ouverte. */
+function liveSpeech() {
+  if (live.win) live.win.speech = true;
+}
+
+/** Fin de phrase détectée par l'app, à sa place exacte dans le flux. */
+function liveCut(c) {
+  if (!live.on) return;
+  const w = live.win;
+  if (w) {
+    Object.assign(w, { start: Math.min(w.start, c.start), end: c.at, first: c.first, last: c.last, voiced: c.voiced, speech: c.speech, closedAt: performance.now() });
+    winClosed(w);
+  }
+  live.win = winOpen(c.at);
+  live.queue.push({ cut: true });
+  liveFlushQueue();
+}
+
+function winClosed(w) {
+  live.wins.push(w);
+  w.timer = setTimeout(() => winSeal(w), w.speech ? 6000 : 1500);
+  const line = w.line;
+  if (line && !line.dead) {
+    line.span = winSpan(w);
+    translateText(line);   // la phrase est complète : traduction définitive
+    liveVoice(line);
+  }
+}
+
+/** La fenêtre ne recevra plus de transcription. */
+function winSeal(w) {
+  if (w.sealed) return;
+  w.sealed = true;
+  clearTimeout(w.timer);
+  const i = live.wins.indexOf(w);
+  if (i >= 0) live.wins.splice(i, 1);
+  if (!w.line && w.speech && w.voiced >= 1) liveMiss();
+}
+
+function winSpan(w) {
+  return [w.first >= 0 ? w.first : w.start, w.last >= 0 ? w.last : (w.end === null ? live.pos : w.end)];
+}
+
+/** Fenêtre d'une transcription : par ses horodatages, sinon par l'ordre d'arrivée. */
+function winFor(session, tr) {
+  const open = live.win;
+  const pending = live.wins.filter((w) => !w.sealed);
+  const a = durationSeconds(tr.startOffset), b = durationSeconds(tr.endOffset);
+  if (a !== null && b !== null && b >= a && session.base !== null) {
+    const mid = session.base + Math.round((a + b) / 2 * RATE);
+    const hit = pending.find((w) => mid >= w.start && mid < w.end);
+    if (hit) return hit;
+    if (open && mid >= open.start && mid <= live.pos + RATE) return open;
+  }
+  // Sans horodatage utilisable : la plus ancienne phrase finie qui attend encore sa transcription
+  // (en activité manuelle, le serveur ne transcrit qu'en fin de phrase), sinon la phrase en cours.
+  const waiting = pending.find((w) => w.speech && !w.line);
+  if (waiting && (session.manual || !open || !open.speech)) return waiting;
+  return open || pending[pending.length - 1];
+}
+
 function liveFinal(session, tr) {
   const text = String(tr.text || '').replace(/\s+/g, ' ').trim();
-  if (!text) return;
+  if (!text || isNoiseOnly(text)) return;
   liveHideInterim();
-  const now = performance.now();
-  const at = (d) => {
-    const v = durationSeconds(d);
-    return v === null || session.base === null ? null : session.base + Math.round(v * RATE);
-  };
-  let end = at(tr.endOffset);
-  let start = at(tr.startOffset);
-  if (end === null) end = live.pos - Math.round(0.6 * RATE);
-  if (start === null || start >= end) start = end - Math.round(Math.min(8, Math.max(0.8, text.split(' ').length * 0.25)) * RATE);
-  // Une phrase livrée en plusieurs morceaux rapprochés reste une seule ligne.
-  const prev = live.lastLine;
-  if (prev && !prev.dead && prev.session === session && now - prev.finalAt < 350) {
-    prev.vi += ' ' + text;
-    prev.finalAt = now;
-    prev.span[1] = Math.max(prev.span[1], end);
-    render(prev);
-    translateText(prev);
-    return;
-  }
   if (isForeignSpeech(text, tr.languageCode)) return;   // anglais ou français : rien à traduire
-  const line = {
-    id: ++lineSeq, kind: 'live', session, createdAt: Date.now(), finalAt: now,
-    vi: text, fr: '', status: 'waiting', error: '', autoRetry: false, voiceIds: null, span: [start, end]
-  };
-  live.lastLine = line;
-  lines.push(line);
-  mountLine(line);
-  translateText(line);
-  liveVoice(line);
+  const w = winFor(session, tr);
+  if (!w) return;
+  for (const old of live.wins.slice()) if (old.id < w.id) winSeal(old);
+  let line = w.line && !w.line.dead ? w.line : null;
+  if (line) {
+    line.vi += ' ' + text;
+    render(line);
+  } else {
+    line = {
+      id: ++lineSeq, kind: 'live', win: w, createdAt: Date.now(), vi: text, fr: '', doneVi: '',
+      status: 'waiting', error: '', autoRetry: false, voiceIds: null, span: winSpan(w)
+    };
+    w.line = line;
+    lines.push(line);
+    mountLine(line);
+  }
+  if (w.end !== null) {
+    // Phrase finie : traduction (ou mise à jour si un morceau arrive en retard), couleur de la voix.
+    line.span = winSpan(w);
+    translateText(line);
+    liveVoice(line);
+  } else if (Date.now() - line.createdAt >= 4000) {
+    translateText(line);   // long monologue : traduction provisoire, refaite à la fin de la phrase
+  }
+}
+
+/** Phrase parlée restée sans transcription. Quatre en activité manuelle sans aucune réponse du
+ * serveur : il ne suit pas ce mode, on revient à sa propre détection de parole. */
+function liveMiss() {
+  if (!LIVE_LEVELS[live.level].manual || live.heard || !live.on) return;
+  if (++live.misses < 4) return;
+  live.level = LIVE_LEVELS.length - 1;
+  live.note = 'découpage par l\'app sans réponse du serveur : retour à la détection de Google';
+  liveReconnect();
+  if (!sheet.hidden) renderTech();
 }
 
 /** Audio d'une phrase, retrouvé dans les 90 dernières secondes, pour la couleur de la voix. */
 function liveVoice(line) {
-  if (!S.voices || !voice.worker || voice.state === 'error') return;
+  if (!S.voices || !voice.worker || voice.state === 'error' || line.voiceSent || !line.span) return;
   const a = Math.max(0, line.span[0] - Math.round(0.15 * RATE));
   const b = Math.min(live.pos, line.span[1] + Math.round(0.15 * RATE));
   if (b - a < 0.6 * RATE) return;
-  const out = new Float32Array(Math.min(b - a, 12 * RATE));
+  const out = new Float32Array(Math.min(b - a, 20 * RATE));
   let filled = 0;
   for (const c of live.ring) {
     const cs = c.end - c.data.length;
     if (c.end <= a || cs >= b) continue;
     for (let i = Math.max(a, cs); i < Math.min(b, c.end) && i - a < out.length; i++) { out[i - a] = c.data[i - cs] / 32768; filled++; }
   }
-  if (filled >= 0.6 * RATE) voiceEmbed(line, out);
+  if (filled >= 0.6 * RATE) {
+    line.voiceSent = true;
+    voiceEmbed(line, out);
+  }
 }
 
 function cleanFrench(text) {
@@ -1108,9 +1300,13 @@ async function translateText(line) {
     render(line);
     return;
   }
+  if (line.vi === line.doneVi && line.status === 'done') return;   // déjà traduite telle quelle
   line.translating = true;
   line.again = false;
-  Object.assign(line, { status: 'waiting', error: '', autoRetry: false, fr: '' });
+  // Mise à jour d'une phrase déjà traduite (morceau arrivé ensuite) : l'ancienne traduction reste
+  // affichée jusqu'à la nouvelle, sans clignoter.
+  const update = !!line.fr;
+  Object.assign(line, { status: update ? 'done' : 'waiting', error: '', autoRetry: false });
   render(line);
   inFlight++;
   updateStatus();
@@ -1124,7 +1320,7 @@ async function translateText(line) {
       maxTokens: 512,
       onText: (text) => {
         if (!first) first = performance.now();
-        if (line.dead || line.vi !== vi) return;
+        if (update || line.dead || line.vi !== vi) return;
         line.fr = cleanFrench(text);
         line.status = 'streaming';
         render(line);
@@ -1134,13 +1330,21 @@ async function translateText(line) {
     tech.total = performance.now() - t0;
     if (!line.dead && line.vi === vi && !line.again) {
       const fr = cleanFrench(raw);
-      if (fr === '-' || isNoiseOnly(fr)) removeLine(line);
-      else { Object.assign(line, { fr, status: 'done' }); render(line); }
+      if (fr === '-' || isNoiseOnly(fr)) {
+        // Rien à traduire (anglais, bruit) : la ligne disparaît, sauf si la phrase continue.
+        if (line.win && line.win.end === null) { Object.assign(line, { fr: '', status: 'waiting' }); render(line); }
+        else removeLine(line);
+      } else {
+        Object.assign(line, { fr, status: 'done', doneVi: vi });
+        render(line);
+      }
     }
     retryFailed();
   } catch (err) {
     if (!line.dead) {
-      Object.assign(line, { status: 'failed', error: errorMessage(err), autoRetry: isTransient(err) || isKeyError(err) });
+      // Mise à jour ratée : l'ancienne traduction reste, la suivante réessaiera.
+      if (update) line.status = 'done';
+      else Object.assign(line, { status: 'failed', error: errorMessage(err), autoRetry: isTransient(err) || isKeyError(err) });
       render(line);
     }
     if (isKeyError(err)) showBanner(errorMessage(err));
@@ -1157,84 +1361,61 @@ const WORKLET_SOURCE = [
   Resampler.toString(),
   Segmenter.toString(),
   Agc.toString(),
+  Turns.toString(),
+  Capture.toString(),
   `class TDCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const o = (options && options.processorOptions) || {};
+    const port = this.port;
     this.rs = new Resampler(sampleRate, 16000);
-    this.seg = new Segmenter(o.tuning);
-    this.agc = new Agc();
-    this.count = 0;
-    this.every = Math.round(sampleRate * 0.05);
-    this.stream = !!o.stream;
-    this.pcm = new Int16Array(1600);
-    this.fill = 0;
-    this.pos = 0;
-    this.port.onmessage = (e) => {
-      const m = e.data || {};
-      if (m.type === 'stream') { this.stream = !!m.on; return; }
-      if (m.type === 'flush' || m.type === 'tune') {
-        const s = this.seg.flush();
-        if (s) this.port.postMessage({ type: 'segment', samples: s }, [s.buffer]);
-        if (m.type === 'tune') this.seg = new Segmenter(m.tuning);
-        else this.port.postMessage({ type: 'flushed', id: m.id });
-      }
-    };
+    this.cap = new Capture(o, function (m, transfer) { port.postMessage(m, transfer || []); });
+    port.onmessage = (e) => this.cap.command(e.data || {});
   }
   process(inputs) {
     const input = inputs[0];
-    if (input && input.length) {
-      const down = this.rs.process(input[0]);
-      // Le découpage mesure le son brut ; le gain automatique ne touche que le flux envoyé.
-      const segs = this.seg.push(down);
-      if (this.stream) {
-        this.agc.process(down);
-        for (let i = 0; i < down.length; i++) {
-          const v = down[i] > 1 ? 1 : down[i] < -1 ? -1 : down[i];
-          this.pcm[this.fill++] = v < 0 ? v * 32768 : v * 32767;
-          if (this.fill === 1600) {
-            this.port.postMessage({ type: 'pcm', data: this.pcm, end: this.pos + i + 1 }, [this.pcm.buffer]);
-            this.pcm = new Int16Array(1600);
-            this.fill = 0;
-          }
-        }
-      }
-      this.pos += down.length;
-      if (!this.stream) for (const s of segs) this.port.postMessage({ type: 'segment', samples: s }, [s.buffer]);
-      this.count += input[0].length;
-      if (this.count >= this.every) {
-        this.port.postMessage({ type: 'level', v: this.seg.peak, gain: this.stream ? this.agc.gainDb : null });
-        this.seg.peak = 0;
-        this.count = 0;
-      }
-    }
+    if (input && input.length) this.cap.process(this.rs.process(input[0]));
     return true;
   }
 }
 registerProcessor('td-capture', TDCapture);`
 ].join('\n');
 
-// Découpage : attendre la fin de la phrase donne à Gemini plus de contexte (moins d'erreurs) ;
-// le mode rapide coupe plus tôt, au prix de phrases parfois tronquées.
+// Découpage : attendre une vraie pause donne des phrases entières (moins d'erreurs) ; le mode
+// rapide coupe plus tôt, au prix de phrases parfois tronquées. `tuning` règle le mode par
+// extraits (Segmenter), `turns` l'écoute continue (Turns).
 const CUTS = [
-  { id: 'complete', title: 'Phrases complètes', sub: 'Attend 0,7\u00a0s de silence, extraits jusqu\'à 8\u00a0s : plus juste, la traduction arrive un peu plus tard (recommandé)', tuning: { endSilence: 0.7, maxSegment: 8, cutSearchWindow: 2 } },
-  { id: 'fast', title: 'Rapide', sub: 'Coupe dès 0,45\u00a0s de silence, extraits jusqu\'à 5\u00a0s : plus réactif, mais phrases parfois coupées', tuning: {} }
-];
-function currentTuning() {
-  return (CUTS.find((c) => c.id === S.cut) || CUTS[0]).tuning;
-}
-/** Change le découpage pendant l'écoute : la phrase en cours part telle quelle. */
-function applyTuning() {
-  if (!listening) return;
-  if (cap.node) cap.node.port.postMessage({ type: 'tune', tuning: currentTuning() });
-  else if (cap.dsp) {
-    const s = cap.dsp.flush();
-    if (s) enqueue(s);
-    cap.dsp = new Segmenter(currentTuning());
+  {
+    id: 'complete', title: 'Phrases complètes',
+    sub: 'Attend une vraie pause avant de traduire : phrases entières, la traduction arrive un peu plus tard (recommandé)',
+    tuning: { endSilence: 0.7, maxSegment: 8, cutSearchWindow: 2 },
+    turns: { endSilence: 0.8, softMax: 8, softPause: 0.25, hardMax: 14 }
+  },
+  {
+    id: 'fast', title: 'Rapide',
+    sub: 'Traduit dès une courte pause : plus réactif, mais phrases parfois coupées',
+    tuning: {},
+    turns: { endSilence: 0.5, softMax: 5, softPause: 0.2, hardMax: 9 }
   }
+];
+function currentCut() {
+  return CUTS.find((c) => c.id === S.cut) || CUTS[0];
+}
+function currentTuning() { return currentCut().tuning; }
+function currentTurns() { return currentCut().turns; }
+
+/** Commande pour la chaîne du micro, qu'elle tourne dans l'AudioWorklet ou en secours. */
+function capCommand(m) {
+  if (cap.node) cap.node.port.postMessage(m);
+  else if (cap.feed) cap.feed.command(m);
 }
 
-const cap = { ctx: null, stream: null, src: null, node: null, sp: null, dsp: null, sink: null, url: '', lastAudio: 0, failures: 0 };
+/** Change le découpage pendant l'écoute : la phrase en cours part telle quelle. */
+function applyTuning() {
+  if (listening) capCommand({ type: 'tune', tuning: currentTuning(), turns: currentTurns() });
+}
+
+const cap = { ctx: null, stream: null, src: null, node: null, sp: null, feed: null, sink: null, url: '', lastAudio: 0, failures: 0 };
 const flushWaiters = new Map();
 let flushSeq = 0;
 let recovering = false;
@@ -1247,6 +1428,8 @@ function onCapture(msg) {
   if (document.hidden) heardWhileHidden = true;
   if (msg.type === 'level') { setLevel(msg.v); tech.gain = msg.gain; }
   else if (msg.type === 'pcm') liveSend(msg);
+  else if (msg.type === 'cut') liveCut(msg);
+  else if (msg.type === 'speech') liveSpeech(msg);
   else if (msg.type === 'segment') { if (engine === 'clips') enqueue(msg.samples); }
   else if (msg.type === 'flushed') {
     const done = flushWaiters.get(msg.id);
@@ -1294,7 +1477,7 @@ async function buildGraph(ctx) {
       const node = new AudioWorkletNode(ctx, 'td-capture', {
         numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
         channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers',
-        processorOptions: { tuning: currentTuning(), stream: engine === 'live' }
+        processorOptions: { tuning: currentTuning(), turns: currentTurns(), stream: engine === 'live' }
       });
       node.port.onmessage = (e) => onCapture(e.data);
       node.connect(cap.sink);
@@ -1308,27 +1491,10 @@ async function buildGraph(ctx) {
     // Secours : même traitement, sur le thread principal.
     const sp = ctx.createScriptProcessor(2048, 1, 1);
     const rs = new Resampler(ctx.sampleRate, 16000);
-    const agc = new Agc();
-    cap.dsp = new Segmenter(currentTuning());
-    let pcm = new Int16Array(1600), fill = 0, pos = 0;
+    const feed = new Capture({ tuning: currentTuning(), turns: currentTurns(), stream: engine === 'live' }, (m) => onCapture(m));
+    cap.feed = feed;
     sp.onaudioprocess = (e) => {
-      const seg = cap.dsp;
-      if (!seg) return;
-      const down = rs.process(e.inputBuffer.getChannelData(0));
-      const segs = seg.push(down);
-      const streaming = engine === 'live';
-      if (streaming) {
-        agc.process(down);
-        for (let i = 0; i < down.length; i++) {
-          const v = Math.max(-1, Math.min(1, down[i]));
-          pcm[fill++] = v < 0 ? v * 32768 : v * 32767;
-          if (fill === 1600) { onCapture({ type: 'pcm', data: pcm, end: pos + i + 1 }); pcm = new Int16Array(1600); fill = 0; }
-        }
-      }
-      pos += down.length;
-      for (const s of segs) onCapture({ type: 'segment', samples: s });
-      onCapture({ type: 'level', v: seg.peak, gain: streaming ? agc.gainDb : null });
-      seg.peak = 0;
+      if (cap.feed === feed) feed.process(rs.process(e.inputBuffer.getChannelData(0)));
     };
     sp.connect(cap.sink);
     cap.sp = sp;
@@ -1368,20 +1534,14 @@ function micError(e) {
   return 'Impossible de démarrer le micro : ' + ((e && (e.message || e.name)) || 'erreur inconnue');
 }
 
+/** Rend la phrase en cours (extrait, ou fin de phrase en continu) ; attend l'accusé du micro. */
 function flushCapture() {
   return new Promise((resolve) => {
-    if (cap.node) {
-      const id = ++flushSeq;
-      flushWaiters.set(id, resolve);
-      cap.node.port.postMessage({ type: 'flush', id });
-      setTimeout(() => { if (flushWaiters.delete(id)) resolve(); }, 400);
-    } else {
-      if (cap.dsp) {
-        const s = cap.dsp.flush();
-        if (s) enqueue(s);
-      }
-      resolve();
-    }
+    if (!cap.node && !cap.feed) { resolve(); return; }
+    const id = ++flushSeq;
+    flushWaiters.set(id, resolve);
+    capCommand({ type: 'flush', id });
+    setTimeout(() => { if (flushWaiters.delete(id)) resolve(); }, 400);
   });
 }
 
@@ -1419,7 +1579,7 @@ async function startListening() {
     voiceStart();
   } catch (e) {
     try { ctx.close(); } catch (x) { /* déjà fermé */ }
-    Object.assign(cap, { ctx: null, node: null, sp: null, dsp: null, sink: null, src: null, stream: null });
+    Object.assign(cap, { ctx: null, node: null, sp: null, feed: null, sink: null, src: null, stream: null });
     unlockScreen();
     showBanner(micError(e));
   } finally {
@@ -1441,7 +1601,7 @@ async function stopListening() {
   if (cap.stream) cap.stream.getTracks().forEach((t) => t.stop());
   try { if (cap.node) cap.node.port.onmessage = null; } catch (e) { /* rien */ }
   try { if (cap.ctx) await cap.ctx.close(); } catch (e) { /* déjà fermé */ }
-  Object.assign(cap, { ctx: null, node: null, sp: null, dsp: null, sink: null, src: null, stream: null });
+  Object.assign(cap, { ctx: null, node: null, sp: null, feed: null, sink: null, src: null, stream: null });
   updateStatus();
 }
 
@@ -1635,7 +1795,7 @@ $('pasteBtn').addEventListener('click', async () => {
 });
 
 const ENGINES = [
-  { id: 'live', title: 'Continue', sub: "Gemini 3.5 Transcribe écoute sans interruption et écrit le vietnamien au fil de la parole ; chaque phrase est ensuite traduite. Le plus juste (recommandé)." },
+  { id: 'live', title: 'Continue', sub: "Gemini 3.5 Transcribe écoute sans interruption et écrit le vietnamien au fil de la parole ; l'app coupe les phrases sur les vraies pauses et traduit chacune. Le plus juste (recommandé)." },
   { id: 'clips', title: 'Par extraits', sub: "L'ancien mode : chaque phrase est envoyée en audio à Gemini, qui transcrit et traduit d'un coup." }
 ];
 function renderEngines() {
@@ -1652,7 +1812,6 @@ function renderEngines() {
     input.checked = en.id === (S.engine === 'clips' ? 'clips' : 'live');
     input.addEventListener('change', () => {
       save('engine', en.id);
-      $('cutGroup').hidden = en.id !== 'clips';
       $('engineNote').hidden = !listening;
     });
     const text = document.createElement('span');
@@ -1664,7 +1823,6 @@ function renderEngines() {
     label.append(input, text);
     box.appendChild(label);
   }
-  $('cutGroup').hidden = S.engine !== 'clips';
   $('engineNote').hidden = true;
 }
 
@@ -1771,7 +1929,7 @@ function seconds(ms) {
 
 function liveStatusText() {
   if (engine === 'live' && live.on) {
-    if (live.state === 'connected') return 'continue · Gemini 3.5 Transcribe connecté';
+    if (live.state === 'connected') return 'continue · Gemini 3.5 Transcribe connecté · phrases découpées par ' + (LIVE_LEVELS[live.level].manual ? "l'app" : 'Google');
     if (live.state === 'reconnecting') return 'continue · reconnexion (' + live.error + ')';
     return 'continue · connexion…';
   }
@@ -1799,6 +1957,7 @@ function renderTech() {
     ['Voix', voiceStatus()]
   ];
   if (tech.probe && !tech.probe.ok) rows.push(['Dernier test', errorMessage(tech.probe.err)]);
+  if (live.note) rows.push(['Écoute (note)', live.note]);
   if (tech.note) rows.push(['Note', tech.note]);
   const dl = $('techInfo');
   dl.textContent = '';

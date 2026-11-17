@@ -1,5 +1,5 @@
 // ─── Traitement du son et du texte ───────────────────────────────────────────
-// Code pur, sans dépendance au navigateur. Resampler, Segmenter et Agc tournent dans
+// Code pur, sans dépendance au navigateur. Resampler, Segmenter, Agc, Turns et Capture tournent dans
 // l'AudioWorklet (thread audio) : leur source y est recopiée telle quelle, elles
 // ne doivent donc rien utiliser qui soit défini en dehors d'elles.
 
@@ -104,6 +104,7 @@ class Segmenter {
     this.cur = [];         // trames de la phrase en cours
     this.silenceRun = 0;
     this.peak = 0;         // niveau max (0…1) depuis la dernière lecture, pour l'interface
+    this.onFrame = null;   // (parole ?, numéro de trame) : décision de chaque trame, pour Turns
   }
 
   /** Ajoute des échantillons à 16 kHz. Renvoie les phrases terminées (Float32Array). */
@@ -152,6 +153,7 @@ class Segmenter {
     if (this.framesSeen <= this.calibrationFrames) {
       this.noiseFloor = this.percentile();
       this.pushIdle({ f: f, e: db, v: false });
+      if (this.onFrame) this.onFrame(false, this.framesSeen);
       return null;
     }
 
@@ -159,6 +161,7 @@ class Segmenter {
     const isStart = db > Math.max(this.noiseFloor + t.startMarginDB, t.absoluteFloorDB);
     const isKeep = db > Math.max(this.noiseFloor + t.keepMarginDB, t.absoluteFloorDB);
     this.noiseFloor = this.noiseFloor * 0.8 + this.percentile() * 0.2;
+    if (this.onFrame) this.onFrame(isKeep, this.framesSeen);
 
     if (!this.inSpeech) {
       this.pushIdle({ f: f, e: db, v: isKeep });
@@ -335,6 +338,195 @@ class Agc {
   }
 }
 
+/**
+ * Phrases de l'écoute continue : une fenêtre = une phrase ou une réplique, que Gemini transcrit
+ * d'un bloc et qui est traduite d'un bloc. Elle se ferme sur une vraie pause (endSilence) ;
+ * pendant un long monologue, sur la première courte pause passé softMax de parole, au plus tard
+ * à hardMax. Un long silence est aussi refermé (idleMax), toujours pendant le silence.
+ * Reçoit la décision parole / silence de Segmenter pour chaque trame de 20 ms.
+ */
+class Turns {
+  constructor(tuning) {
+    const t = Object.assign({
+      endSilence: 0.8,   // pause qui clôt une phrase
+      softMax: 8,        // passé cette durée depuis le premier mot, une courte pause suffit…
+      softPause: 0.25,   // …de cette longueur
+      hardMax: 14,       // durée maximale depuis le premier mot
+      idleMax: 20,       // fenêtre sans parole refermée après cette durée
+      minVoiced: 0.2     // parole minimale pour qu'une fenêtre compte
+    }, tuning || {});
+    const fd = 0.02;
+    this.endFrames = Math.max(1, Math.round(t.endSilence / fd));
+    this.softFrames = Math.max(1, Math.round(t.softMax / fd));
+    this.pauseFrames = Math.max(1, Math.round(t.softPause / fd));
+    this.hardFrames = Math.max(this.softFrames, Math.round(t.hardMax / fd));
+    this.idleFrames = Math.max(1, Math.round(t.idleMax / fd));
+    this.minVoiced = Math.max(1, Math.round(t.minVoiced / fd));
+    this.reset(0);
+  }
+
+  reset(at) {
+    this.start = at;
+    this.frames = 0;
+    this.voiced = 0;
+    this.run = 0;
+    this.silence = 0;
+    this.first = -1;
+    this.last = -1;
+    this.spoke = false;
+  }
+
+  /**
+   * Trame de 20 ms finissant à `end` (position en échantillons). Rend { type: 'speech' } au
+   * début de la parole, { type: 'cut' } à la fin de la fenêtre, sinon null.
+   */
+  frame(keep, end) {
+    this.frames++;
+    let event = null;
+    // Une trame isolée au-dessus du bruit (claquement, klaxon bref) ne compte pas : il en faut deux de suite.
+    this.run = keep ? this.run + 1 : 0;
+    if (this.run >= 2) {
+      if (this.first < 0) this.first = end - 640;
+      this.voiced += this.run === 2 ? 2 : 1;
+      this.last = end;
+      this.silence = 0;
+      if (!this.spoke && this.voiced >= this.minVoiced) {
+        this.spoke = true;
+        event = { type: 'speech', at: end };
+      }
+    } else {
+      this.silence++;
+    }
+    const speech = this.voiced >= this.minVoiced;
+    if (!speech) {
+      // Pas encore de vraie parole : un bruit bref suivi d'une pause est oublié, et un long
+      // silence est refermé (pendant le silence, donc sans couper personne).
+      if (this.first >= 0 && this.silence >= this.endFrames) { this.first = -1; this.last = -1; this.voiced = 0; }
+      if (this.frames >= this.idleFrames && this.silence >= this.endFrames) return this.cut(end);
+      return event;
+    }
+    const spoken = (end - this.first) / 320;   // trames depuis le premier mot
+    if (this.silence >= this.endFrames ||
+        (spoken >= this.softFrames && this.silence >= this.pauseFrames) ||
+        spoken >= this.hardFrames) {
+      return this.cut(end);
+    }
+    return event;
+  }
+
+  /** Ferme la fenêtre à la position `at` et en ouvre une nouvelle. */
+  cut(at) {
+    const w = {
+      type: 'cut', at: at, start: this.start, first: this.first, last: this.last,
+      voiced: this.voiced * 0.02, speech: this.voiced >= this.minVoiced
+    };
+    this.reset(at);
+    return w;
+  }
+}
+
+/**
+ * Chaîne du micro à 16 kHz, commune à l'AudioWorklet et au mode de secours (ScriptProcessor).
+ * Par extraits : rend chaque phrase découpée (« segment »). En continu : flux PCM 16 bits par
+ * morceaux de 100 ms avec gain automatique, et marqueurs de fin de phrase (« cut ») placés
+ * exactement entre deux morceaux. `post(message, transferts)` reçoit les messages pour l'app.
+ */
+class Capture {
+  constructor(options, post) {
+    const o = options || {};
+    this.post = post;
+    this.stream = !!o.stream;
+    this.pos = 0;          // échantillons à 16 kHz reçus depuis le début
+    this.agc = new Agc();
+    this.pcm = new Int16Array(1600);
+    this.fill = 0;
+    this.events = [];
+    this.count = 0;
+    this.retune(o.tuning, o.turns);
+  }
+
+  retune(tuning, turns) {
+    const self = this;
+    this.seg = new Segmenter(tuning);
+    this.segBase = this.pos;
+    this.seg.onFrame = function (keep, n) { self.frame(keep, self.segBase + n * 320); };
+    this.turns = new Turns(turns);
+    this.turns.reset(this.pos);
+  }
+
+  frame(keep, end) {
+    if (!this.stream) return;
+    const e = this.turns.frame(keep, end);
+    if (e) this.events.push(e);
+  }
+
+  /** Échantillons à 16 kHz (modifiés sur place en continu). */
+  process(down) {
+    const base = this.pos;
+    const segs = this.seg.push(down);
+    if (this.stream) {
+      this.agc.process(down);
+      let k = 0;
+      for (let i = 0; i < down.length; i++) {
+        const v = down[i] > 1 ? 1 : down[i] < -1 ? -1 : down[i];
+        this.pcm[this.fill++] = v < 0 ? v * 32768 : v * 32767;
+        const at = base + i + 1;
+        if (this.fill === 1600) this.sendPcm(at);
+        while (k < this.events.length && this.events[k].at <= at) {
+          const e = this.events[k++];
+          if (e.type === 'cut') this.sendPcm(at);
+          this.post(e);
+        }
+      }
+      while (k < this.events.length) this.post(this.events[k++]);
+      this.events.length = 0;
+    } else {
+      for (const s of segs) this.post({ type: 'segment', samples: s }, [s.buffer]);
+    }
+    this.pos = base + down.length;
+    this.count += down.length;
+    if (this.count >= 800) {
+      this.post({ type: 'level', v: this.seg.peak, gain: this.stream ? this.agc.gainDb : null });
+      this.seg.peak = 0;
+      this.count = 0;
+    }
+  }
+
+  sendPcm(at) {
+    if (!this.fill) return;
+    let data;
+    if (this.fill === this.pcm.length) {
+      data = this.pcm;
+      this.pcm = new Int16Array(1600);
+    } else {
+      data = this.pcm.slice(0, this.fill);
+    }
+    this.fill = 0;
+    this.post({ type: 'pcm', data: data, end: at }, [data.buffer]);
+  }
+
+  /** Commandes de l'app : stream (continu ou extraits), flush (rendre la phrase en cours), tune. */
+  command(m) {
+    if (m.type === 'stream') {
+      this.stream = !!m.on;
+      this.turns.reset(this.pos);
+      return;
+    }
+    if (m.type !== 'flush' && m.type !== 'tune') return;
+    if (this.stream) {
+      this.sendPcm(this.pos);
+      this.post(this.turns.cut(this.pos));
+    } else {
+      const s = this.seg.flush();
+      // La trame entamée est abandonnée : on recale la position des trames suivantes.
+      this.segBase = this.pos - this.seg.framesSeen * 320;
+      if (s) this.post({ type: 'segment', samples: s }, [s.buffer]);
+    }
+    if (m.type === 'tune') this.retune(m.tuning, m.turns);
+    else this.post({ type: 'flushed', id: m.id });
+  }
+}
+
 /** WAV PCM 16 bits mono. Remonte les voix lointaines (gain plafonné à ×16). */
 function encodeWAV(samples, rate) {
   let peak = 0;
@@ -406,5 +598,5 @@ function parseResponse(raw) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { Resampler, Segmenter, Agc, encodeWAV, toBase64, isBlank, isNoiseOnly, parseResponse };
+  module.exports = { Resampler, Segmenter, Agc, Turns, Capture, encodeWAV, toBase64, isBlank, isNoiseOnly, parseResponse };
 }
