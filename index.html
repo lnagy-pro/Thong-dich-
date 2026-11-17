@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-yJY9fH6zPkQJFGFb/cnw4pHJV51orqykPOP0mcuPaDs=' 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'sha256-BxRQVYc7Wt/KEvdBtu6pNakLBa4/b3q5r8MsGTIOv+s='; img-src data:; connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://cdn.jsdelivr.net; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jHbu3ylEt3SXaoLHC3vXviLOLVrkxXQefrac+plAO2g=' 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'sha256-BxRQVYc7Wt/KEvdBtu6pNakLBa4/b3q5r8MsGTIOv+s='; img-src data:; connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://cdn.jsdelivr.net; worker-src blob:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Thông Dịch</title>
 <meta name="description" content="Interprète en direct : vietnamien du Centre vers le français, avec Gemini.">
@@ -600,13 +600,13 @@ input[type="password"], input[type="text"], select {
         <div class="panel"><dl id="techInfo"></dl></div>
       </section>
 
-      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.0</p>
+      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.1</p>
     </div>
   </section>
 </div>
 <noscript><p class="note">Activez JavaScript pour utiliser Thông Dịch.</p></noscript>
 <script>// ─── Traitement du son et du texte ───────────────────────────────────────────
-// Code pur, sans dépendance au navigateur. Resampler et Segmenter tournent dans
+// Code pur, sans dépendance au navigateur. Resampler, Segmenter et Agc tournent dans
 // l'AudioWorklet (thread audio) : leur source y est recopiée telle quelle, elles
 // ne doivent donc rien utiliser qui soit défini en dehors d'elles.
 
@@ -749,7 +749,8 @@ class Segmenter {
     let sum = 0;
     for (let k = 0; k < f.length; k++) sum += f[k] * f[k];
     const db = 20 * Math.log10(Math.max(Math.sqrt(sum / f.length), 1e-6));
-    const ui = Math.min(1, Math.max(0, (db + 60) / 50));
+    // Niveau affiché : écart au bruit de fond, pour qu'une voix lointaine fasse bouger l'anneau.
+    const ui = Math.min(1, Math.max(0, (db - this.noiseFloor - 3) / 27));
     if (ui > this.peak) this.peak = ui;
     this.framesSeen++;
     this.pushHistory(db);
@@ -853,14 +854,102 @@ class Segmenter {
   }
 }
 
-/** WAV PCM 16 bits mono. Remonte les voix lointaines (gain plafonné à ×8). */
+/**
+ * Gain automatique guidé par la parole, pour l'écoute continue (16 kHz, trames de 20 ms).
+ * Le micro est pris brut, sans traitement d'iOS : une voix à deux ou trois mètres arrive
+ * 20 à 30 dB plus bas qu'une voix collée au micro, trop bas pour que Gemini l'entende.
+ * On mesure le niveau de la parole seule (trames nettement au-dessus du bruit de fond) et on
+ * la ramène vers un niveau constant. Le gain ne suit que la parole et reste figé pendant les
+ * silences, pour ne pas faire monter le bruit ; il baisse tout de suite sur une voix forte,
+ * et un limiteur doux absorbe les attaques. Un passe-haut coupe le grondement sous ~75 Hz
+ * (moteurs, vent, téléphone manipulé), qui fausserait la mesure.
+ */
+class Agc {
+  constructor(options) {
+    const o = Object.assign({
+      target: -22,      // dBFS visé pour le haut de la parole (trames de 20 ms)
+      maxGain: 30,      // dB au plus : voix à deux ou trois mètres
+      minGain: -6,      // dB : baisse aussi une voix criée tout près du micro
+      startGain: 12,    // dB avant la première parole
+      rise: 0.5,        // dB par trame au moins quand le gain monte…
+      riseFrac: 0.15,   // …ou cette part de l'écart : une voix lointaine est remontée en ~0,5 s
+      fall: 2,          // dB par trame quand il baisse (100 dB/s)
+      up: 0.25,         // suivi d'une voix plus forte (part de l'écart rattrapée par trame)
+      down: 0.08,       // suivi d'une voix plus faible
+      hot: -10,         // trame plus forte que ça après gain : baisse immédiate
+      margin: 6,        // dB au-dessus du bruit de fond pour compter comme parole
+      floor: -66,       // dBFS : en dessous, jamais de la parole
+      noiseWindow: 2.5  // s : fenêtre du bruit de fond
+    }, options || {});
+    this.o = o;
+    this.N = 320;
+    this.sum = 0;
+    this.n = 0;
+    this.x1 = 0;
+    this.y1 = 0;
+    this.history = [];
+    this.historySize = Math.max(25, Math.round(o.noiseWindow * 16000 / this.N));
+    this.cursor = 0;
+    this.level = o.target - o.startGain;   // haut de la parole, avant gain (dBFS)
+    this.gainDb = o.startGain;
+    this.g = Math.pow(10, o.startGain / 20);   // gain appliqué, en rampe vers gainDb
+    this.step = 0;
+    this.limited = 0;   // échantillons passés par le limiteur
+  }
+
+  /** Filtre et amplifie sur place ; renvoie le même tableau. */
+  process(x) {
+    for (let i = 0; i < x.length; i++) {
+      const v = x[i] - this.x1 + 0.97 * this.y1;
+      this.x1 = x[i];
+      this.y1 = v;
+      this.sum += v * v;
+      let y = v * this.g;
+      this.g += this.step;
+      const a = y < 0 ? -y : y;
+      if (a > 0.9) {
+        y = (y < 0 ? -1 : 1) * (0.9 + 0.1 * Math.tanh((a - 0.9) / 0.1));
+        this.limited++;
+      }
+      x[i] = y;
+      if (++this.n === this.N) this.frame();
+    }
+    return x;
+  }
+
+  frame() {
+    const o = this.o;
+    const db = 10 * Math.log10(Math.max(this.sum / this.N, 1e-12));
+    this.sum = 0;
+    this.n = 0;
+    if (this.history.length < this.historySize) this.history.push(db);
+    else {
+      this.history[this.cursor] = db;
+      this.cursor = (this.cursor + 1) % this.historySize;
+    }
+    const sorted = this.history.slice().sort(function (a, b) { return a - b; });
+    const noise = sorted[Math.floor(sorted.length * 15 / 100)];
+    // Parole : suit vite une voix plus forte, lentement une voix plus faible.
+    if (this.history.length >= 10 && db > Math.max(noise + o.margin, o.floor)) {
+      this.level += (db > this.level ? o.up : o.down) * (db - this.level);
+    }
+    const goal = Math.min(o.maxGain, Math.max(o.minGain, o.target - this.level));
+    const climb = Math.max(o.rise, o.riseFrac * (goal - this.gainDb));
+    let gain = goal > this.gainDb ? Math.min(goal, this.gainDb + climb) : Math.max(goal, this.gainDb - o.fall);
+    if (db + gain > o.hot) gain = Math.max(o.minGain, o.hot - db);
+    this.gainDb = gain;
+    this.step = (Math.pow(10, gain / 20) - this.g) / this.N;
+  }
+}
+
+/** WAV PCM 16 bits mono. Remonte les voix lointaines (gain plafonné à ×16). */
 function encodeWAV(samples, rate) {
   let peak = 0;
   for (let i = 0; i < samples.length; i++) {
     const a = Math.abs(samples[i]);
     if (a > peak) peak = a;
   }
-  const gain = peak > 0.0005 ? Math.min(0.89 / peak, 8) : 1;
+  const gain = peak > 0.0005 ? Math.min(0.89 / peak, 16) : 1;
   const n = samples.length;
   const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
@@ -924,7 +1013,7 @@ function parseResponse(raw) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { Resampler, Segmenter, encodeWAV, toBase64, isBlank, isNoiseOnly, parseResponse };
+  module.exports = { Resampler, Segmenter, Agc, encodeWAV, toBase64, isBlank, isNoiseOnly, parseResponse };
 }
 
 // ─── Reconnaissance des voix ─────────────────────────────────────────────────
@@ -1262,7 +1351,7 @@ const CONFIGS = [
   { api: 'generate', tier: false, safety: false, thinking: false, label: 'generateContent (simplifiée)' }
 ];
 let cfgIndex = 0;
-const tech = { note: '', mode: '', rate: 0, ttfb: null, total: null, probe: null };
+const tech = { note: '', mode: '', rate: 0, gain: null, ttfb: null, total: null, probe: null };
 
 class GemError extends Error {
   constructor(kind, message, status) {
@@ -2358,12 +2447,14 @@ async function translateText(line) {
 const WORKLET_SOURCE = [
   Resampler.toString(),
   Segmenter.toString(),
+  Agc.toString(),
   `class TDCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const o = (options && options.processorOptions) || {};
     this.rs = new Resampler(sampleRate, 16000);
     this.seg = new Segmenter(o.tuning);
+    this.agc = new Agc();
     this.count = 0;
     this.every = Math.round(sampleRate * 0.05);
     this.stream = !!o.stream;
@@ -2385,7 +2476,10 @@ const WORKLET_SOURCE = [
     const input = inputs[0];
     if (input && input.length) {
       const down = this.rs.process(input[0]);
+      // Le découpage mesure le son brut ; le gain automatique ne touche que le flux envoyé.
+      const segs = this.seg.push(down);
       if (this.stream) {
+        this.agc.process(down);
         for (let i = 0; i < down.length; i++) {
           const v = down[i] > 1 ? 1 : down[i] < -1 ? -1 : down[i];
           this.pcm[this.fill++] = v < 0 ? v * 32768 : v * 32767;
@@ -2397,11 +2491,10 @@ const WORKLET_SOURCE = [
         }
       }
       this.pos += down.length;
-      const segs = this.seg.push(down);
       if (!this.stream) for (const s of segs) this.port.postMessage({ type: 'segment', samples: s }, [s.buffer]);
       this.count += input[0].length;
       if (this.count >= this.every) {
-        this.port.postMessage({ type: 'level', v: this.seg.peak });
+        this.port.postMessage({ type: 'level', v: this.seg.peak, gain: this.stream ? this.agc.gainDb : null });
         this.seg.peak = 0;
         this.count = 0;
       }
@@ -2443,7 +2536,7 @@ let mutedSince = 0;
 function onCapture(msg) {
   cap.lastAudio = performance.now();
   if (document.hidden) heardWhileHidden = true;
-  if (msg.type === 'level') setLevel(msg.v);
+  if (msg.type === 'level') { setLevel(msg.v); tech.gain = msg.gain; }
   else if (msg.type === 'pcm') liveSend(msg);
   else if (msg.type === 'segment') { if (engine === 'clips') enqueue(msg.samples); }
   else if (msg.type === 'flushed') {
@@ -2506,13 +2599,17 @@ async function buildGraph(ctx) {
     // Secours : même traitement, sur le thread principal.
     const sp = ctx.createScriptProcessor(2048, 1, 1);
     const rs = new Resampler(ctx.sampleRate, 16000);
+    const agc = new Agc();
     cap.dsp = new Segmenter(currentTuning());
     let pcm = new Int16Array(1600), fill = 0, pos = 0;
     sp.onaudioprocess = (e) => {
       const seg = cap.dsp;
       if (!seg) return;
       const down = rs.process(e.inputBuffer.getChannelData(0));
-      if (engine === 'live') {
+      const segs = seg.push(down);
+      const streaming = engine === 'live';
+      if (streaming) {
+        agc.process(down);
         for (let i = 0; i < down.length; i++) {
           const v = Math.max(-1, Math.min(1, down[i]));
           pcm[fill++] = v < 0 ? v * 32768 : v * 32767;
@@ -2520,9 +2617,8 @@ async function buildGraph(ctx) {
         }
       }
       pos += down.length;
-      const segs = seg.push(down);
       for (const s of segs) onCapture({ type: 'segment', samples: s });
-      onCapture({ type: 'level', v: seg.peak });
+      onCapture({ type: 'level', v: seg.peak, gain: streaming ? agc.gainDb : null });
       seg.peak = 0;
     };
     sp.connect(cap.sink);
@@ -2988,6 +3084,7 @@ function renderTech() {
     ['Écoute', liveStatusText()],
     ['Connexion', CONFIGS[cfgIndex].label + (S.priority && CONFIGS[cfgIndex].tier ? ' · prioritaire' : '')],
     ['Audio', tech.mode ? tech.mode + ' · ' + tech.rate + ' Hz → 16 kHz' : 'pas encore démarré'],
+    ['Gain du micro', typeof tech.gain === 'number' ? (tech.gain >= 0 ? '+' : '−') + Math.abs(Math.round(tech.gain)) + ' dB, automatique' : 'automatique (×16 au plus par phrase)'],
     ['Dernière phrase', tech.total ? (tech.ttfb ? 'premiers mots ' + seconds(tech.ttfb) + ' · ' : '') + 'complète ' + seconds(tech.total) : '—'],
     ['Écran allumé', 'wakeLock' in navigator ? (wakeLock ? 'actif' : 'pendant l\'écoute') : 'non pris en charge'],
     ['Voix', voiceStatus()]

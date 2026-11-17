@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Thông Dịch</title>
+<meta name="description" content="Interprète en direct : vietnamien du Centre vers le français, avec Gemini.">
+<meta name="theme-color" content="#f2f5f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1211" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Thông Dịch">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="__ICON180__">
+<link rel="icon" type="image/png" href="__ICON64__">
+<style>__CSS__</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Thông Dịch</h1>
+      <p class="status"><span class="dot" id="dot"></span><span id="statusText">En pause</span></p>
+    </div>
+    <button type="button" class="icon-btn" id="clearBtn" aria-label="Effacer la conversation" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v5.5M14 11v5.5"/></svg>
+      <span class="confirm">Effacer ?</span>
+    </button>
+    <button type="button" class="icon-btn" id="settingsBtn" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9.5M18.5 7H20M4 17h3.5M12.5 17H20"/><circle cx="16" cy="7" r="2.4"/><circle cx="10" cy="17" r="2.4"/></svg>
+    </button>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden>
+    <p id="bannerText"></p>
+    <button type="button" id="bannerClose" aria-label="Fermer le message">×</button>
+  </div>
+
+  <main class="feed" id="feed" aria-label="Conversation traduite">
+    <section class="empty" id="empty">
+      <p class="empty-title">Touchez le micro pour écouter</p>
+      <p class="empty-text">Chaque phrase entendue s'affiche ici : la traduction en grand, le vietnamien en dessous, et une lettre de couleur par personne. L'écoute continue pendant que les traductions arrivent.</p>
+      <article class="line example" aria-label="Exemple de phrase traduite">
+        <span class="example-tag">Exemple</span>
+        <p class="fr"><span class="who v1">A</span>Tu plaisantes ? <span class="who v2">B</span>C'est deux cent mille, pas cinq cent mille.</p>
+        <p class="vi" lang="vi">Mi giỡn hả? / Hai trăm chớ không phải năm trăm.</p>
+      </article>
+      <ul class="tips">
+        <li>Tenez l'iPhone tourné vers les personnes qui parlent.</li>
+        <li>Gardez cette page au premier plan : l'écran reste allumé pendant l'écoute.</li>
+      </ul>
+    </section>
+    <div class="lines" id="lines"></div>
+    <p class="interim" id="interim" lang="vi" aria-live="off" hidden></p>
+  </main>
+
+  <footer class="dock">
+    <button type="button" class="live-pill" id="livePill" hidden>↓ En direct</button>
+    <button type="button" class="mic" id="micBtn" aria-label="Écouter" aria-pressed="false">
+      <span class="ring" aria-hidden="true"></span>
+      <svg class="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5M8.5 21.5h7"/></svg>
+      <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>
+    </button>
+    <p class="hint" id="hint">Toucher pour écouter</p>
+  </footer>
+</div>
+
+<div class="sheet-backdrop" id="sheet" hidden>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <header class="sheet-head">
+      <h2 id="sheetTitle">Réglages</h2>
+      <button type="button" class="text-btn" id="sheetDone">OK</button>
+    </header>
+    <div class="sheet-body">
+      <p class="welcome" id="welcome" hidden>Bienvenue. Pour commencer, collez votre clé API Gemini.</p>
+
+      <section class="group">
+        <h3>Clé API Gemini</h3>
+        <div class="panel">
+          <div class="field">
+            <input id="keyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="AIza…" aria-label="Clé API Gemini">
+            <button type="button" class="small-btn" id="pasteBtn">Coller</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" id="checkBtn">Vérifier et enregistrer</button>
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Créer une clé</a>
+          </div>
+          <p class="key-status" id="keyStatus" aria-live="polite"></p>
+          <p class="note">Gardée seulement dans ce navigateur, envoyée uniquement à Google. Activez la facturation sur le projet de la clé : les quotas suffisent alors pour une conversation continue, et Google n'utilise pas les données pour entraîner ses modèles.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Traduction</h3>
+        <div class="panel">
+          <div class="choices" id="modelChoices" role="radiogroup" aria-label="Modèle"></div>
+          <label class="toggle">
+            <span><b>Mode prioritaire</b><small>Latence plus basse et plus stable aux heures chargées, pour un coût 75 à 100 % plus élevé.</small></span>
+            <input type="checkbox" id="priorityToggle"><i aria-hidden="true"></i>
+          </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Écoute</h3>
+        <div class="panel">
+          <div class="choices" id="engineChoices" role="radiogroup" aria-label="Mode d'écoute"></div>
+          <p class="note" id="engineNote" hidden>S'applique à la prochaine écoute.</p>
+        </div>
+      </section>
+
+      <section class="group" id="cutGroup">
+        <h3>Découpage des phrases</h3>
+        <div class="panel">
+          <div class="choices" id="cutChoices" role="radiogroup" aria-label="Découpage des phrases"></div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Micro</h3>
+        <div class="panel">
+          <select id="micSelect" aria-label="Micro utilisé"></select>
+          <p class="note" id="micNames" hidden>Les noms des micros apparaissent après une première écoute.</p>
+          <p class="note">Le micro de l'iPhone capte bien mieux les voix autour de vous. Ceux des AirPods visent la voix de la personne qui les porte.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Voix</h3>
+        <div class="panel">
+          <label class="toggle">
+            <span><b>Une couleur par personne</b><small>Les voix sont reconnues sur l'appareil, sans rien envoyer de plus (modèle de 9 Mo téléchargé une fois). Moins fiable quand plusieurs personnes parlent en même temps.</small></span>
+            <input type="checkbox" id="voicesToggle"><i aria-hidden="true"></i>
+          </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Affichage</h3>
+        <div class="panel">
+          <label class="toggle">
+            <span><b>Afficher le texte vietnamien</b></span>
+            <input type="checkbox" id="viToggle"><i aria-hidden="true"></i>
+          </label>
+        </div>
+      </section>
+
+      <section class="group tech">
+        <h3>Infos techniques</h3>
+        <div class="panel"><dl id="techInfo"></dl></div>
+      </section>
+
+      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.1</p>
+    </div>
+  </section>
+</div>
+<noscript><p class="note">Activez JavaScript pour utiliser Thông Dịch.</p></noscript>
+<script>__JS__</script>
+</body>
+</html>
