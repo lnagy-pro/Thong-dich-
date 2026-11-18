@@ -350,6 +350,14 @@ class Agc {
  */
 class Turns {
   constructor(tuning) {
+    this.hist = null;
+    this.floor = -90;
+    this.setTuning(tuning);
+    this.reset(0);
+  }
+
+  /** Nouveaux réglages, sans couper la phrase en cours ni perdre la mesure du bruit de fond. */
+  setTuning(tuning) {
     const t = Object.assign({
       endSilence: 1.0,   // pause qui clôt une phrase
       softMax: 6,        // passé cette durée depuis le premier mot, une courte pause suffit…
@@ -369,11 +377,12 @@ class Turns {
     this.hardFrames = Math.max(this.softFrames, Math.round(t.hardMax / fd));
     this.idleFrames = Math.max(1, Math.round(t.idleMax / fd));
     this.minVoiced = Math.max(1, Math.round(t.minVoiced / fd));
-    this.hist = new Float64Array(Math.max(50, Math.round(t.floorWindow / fd)));
-    this.histLen = 0;
-    this.histPos = 0;
-    this.floor = -90;
-    this.reset(0);
+    const n = Math.max(50, Math.round(t.floorWindow / fd));
+    if (!this.hist || this.hist.length !== n) {
+      this.hist = new Float64Array(n);
+      this.histLen = 0;
+      this.histPos = 0;
+    }
   }
 
   /** Parole dans cette trame ? (niveau en dB par rapport au bruit de fond des 10 dernières secondes) */
@@ -436,6 +445,16 @@ class Turns {
     if (this.silence >= this.endFrames) return this.cut(end, 'pause');
     if ((spoken >= this.softFrames && this.silence >= this.pauseFrames) || spoken >= this.hardFrames) return this.cut(end, 'longue réplique');
     return event;
+  }
+
+  /**
+   * La phrase en cours est partie jusqu'à `at` sans passer par ici (autre voix repérée par
+   * l'app) : la durée d'une réplique longue se compte désormais depuis `at`.
+   */
+  rebase(at) {
+    if (!(at > this.start)) return;
+    this.start = at;
+    if (this.first >= 0 && this.first < at) this.first = at;
   }
 
   /** Ferme la fenêtre à la position `at` et en ouvre une nouvelle. */
@@ -543,6 +562,12 @@ class Capture {
       this.turns.reset(this.pos);
       return;
     }
+    if (m.type === 'tune' && this.stream) {
+      // En continu : les nouveaux seuils valent tout de suite, phrase en cours comprise.
+      this.turns.setTuning(m.turns);
+      return;
+    }
+    if (m.type === 'rebase') { this.turns.rebase(m.at); return; }
     if (m.type !== 'flush' && m.type !== 'tune') return;
     if (this.stream) {
       this.sendPcm(this.pos);
