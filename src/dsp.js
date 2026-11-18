@@ -104,7 +104,7 @@ class Segmenter {
     this.cur = [];         // trames de la phrase en cours
     this.silenceRun = 0;
     this.peak = 0;         // niveau max (0…1) depuis la dernière lecture, pour l'interface
-    this.onFrame = null;   // (parole ?, numéro de trame) : décision de chaque trame, pour Turns
+    this.onFrame = null;   // (parole ?, numéro de trame, niveau dB) : chaque trame, pour Turns
   }
 
   /** Ajoute des échantillons à 16 kHz. Renvoie les phrases terminées (Float32Array). */
@@ -153,7 +153,7 @@ class Segmenter {
     if (this.framesSeen <= this.calibrationFrames) {
       this.noiseFloor = this.percentile();
       this.pushIdle({ f: f, e: db, v: false });
-      if (this.onFrame) this.onFrame(false, this.framesSeen);
+      if (this.onFrame) this.onFrame(false, this.framesSeen, db);
       return null;
     }
 
@@ -161,7 +161,7 @@ class Segmenter {
     const isStart = db > Math.max(this.noiseFloor + t.startMarginDB, t.absoluteFloorDB);
     const isKeep = db > Math.max(this.noiseFloor + t.keepMarginDB, t.absoluteFloorDB);
     this.noiseFloor = this.noiseFloor * 0.8 + this.percentile() * 0.2;
-    if (this.onFrame) this.onFrame(isKeep, this.framesSeen);
+    if (this.onFrame) this.onFrame(isKeep, this.framesSeen, db);
 
     if (!this.inSpeech) {
       this.pushIdle({ f: f, e: db, v: isKeep });
@@ -343,26 +343,51 @@ class Agc {
  * d'un bloc et qui est traduite d'un bloc. Elle se ferme sur une vraie pause (endSilence) ;
  * pendant un long monologue, sur la première courte pause passé softMax de parole, au plus tard
  * à hardMax. Un long silence est aussi refermé (idleMax), toujours pendant le silence.
- * Reçoit la décision parole / silence de Segmenter pour chaque trame de 20 ms.
+ *
+ * La parole est repérée par rapport au bruit de fond mesuré sur les 10 dernières secondes (les
+ * moments les plus calmes) : après une voix forte, une réponse plus faible est entendue tout de
+ * suite, au lieu d'être prise pour du silence le temps que la mesure redescende.
  */
 class Turns {
   constructor(tuning) {
     const t = Object.assign({
       endSilence: 1.0,   // pause qui clôt une phrase
-      softMax: 10,       // passé cette durée depuis le premier mot, une courte pause suffit…
+      softMax: 6,        // passé cette durée depuis le premier mot, une courte pause suffit…
       softPause: 0.25,   // …de cette longueur
-      hardMax: 16,       // durée maximale depuis le premier mot
+      hardMax: 12,       // durée maximale depuis le premier mot
       idleMax: 20,       // fenêtre sans parole refermée après cette durée
-      minVoiced: 0.2     // parole minimale pour qu'une fenêtre compte
+      minVoiced: 0.2,    // parole minimale pour qu'une fenêtre compte
+      margin: 6,         // dB au-dessus du bruit de fond pour compter comme parole
+      floorWindow: 10,   // s : fenêtre de mesure du bruit de fond
+      absoluteFloorDB: -66
     }, tuning || {});
     const fd = 0.02;
+    this.t = t;
     this.endFrames = Math.max(1, Math.round(t.endSilence / fd));
     this.softFrames = Math.max(1, Math.round(t.softMax / fd));
     this.pauseFrames = Math.max(1, Math.round(t.softPause / fd));
     this.hardFrames = Math.max(this.softFrames, Math.round(t.hardMax / fd));
     this.idleFrames = Math.max(1, Math.round(t.idleMax / fd));
     this.minVoiced = Math.max(1, Math.round(t.minVoiced / fd));
+    this.hist = new Float64Array(Math.max(50, Math.round(t.floorWindow / fd)));
+    this.histLen = 0;
+    this.histPos = 0;
+    this.floor = -90;
     this.reset(0);
+  }
+
+  /** Parole dans cette trame ? (niveau en dB par rapport au bruit de fond des 10 dernières secondes) */
+  isVoiced(db) {
+    const h = this.hist;
+    h[this.histPos] = db;
+    this.histPos = (this.histPos + 1) % h.length;
+    if (this.histLen < h.length) this.histLen++;
+    if (this.histLen < 10) return false;
+    if (this.histLen < 50 || this.histPos % 5 === 0) {
+      const sorted = Array.prototype.slice.call(h, 0, this.histLen).sort(function (a, b) { return a - b; });
+      this.floor = sorted[Math.floor(this.histLen * 0.05)];
+    }
+    return db > Math.max(this.floor + this.t.margin, this.t.absoluteFloorDB);
   }
 
   reset(at) {
@@ -377,10 +402,12 @@ class Turns {
   }
 
   /**
-   * Trame de 20 ms finissant à `end` (position en échantillons). Rend { type: 'speech' } au
-   * début de la parole, { type: 'cut' } à la fin de la fenêtre, sinon null.
+   * Trame de 20 ms finissant à `end` (position en échantillons), de niveau `db`. Rend
+   * { type: 'speech' } au début de la parole, { type: 'cut' } à la fin de la fenêtre, sinon null.
    */
-  frame(keep, end) {
+  frame(db, end) {
+    const keep = this.isVoiced(db);
+    this.lastKeep = keep;
     this.frames++;
     let event = null;
     // Une trame isolée au-dessus du bruit (claquement, klaxon bref) ne compte pas : il en faut deux de suite.
@@ -402,23 +429,20 @@ class Turns {
       // Pas encore de vraie parole : un bruit bref suivi d'une pause est oublié, et un long
       // silence est refermé (pendant le silence, donc sans couper personne).
       if (this.first >= 0 && this.silence >= this.endFrames) { this.first = -1; this.last = -1; this.voiced = 0; }
-      if (this.frames >= this.idleFrames && this.silence >= this.endFrames) return this.cut(end);
+      if (this.frames >= this.idleFrames && this.silence >= this.endFrames) return this.cut(end, 'silence');
       return event;
     }
     const spoken = (end - this.first) / 320;   // trames depuis le premier mot
-    if (this.silence >= this.endFrames ||
-        (spoken >= this.softFrames && this.silence >= this.pauseFrames) ||
-        spoken >= this.hardFrames) {
-      return this.cut(end);
-    }
+    if (this.silence >= this.endFrames) return this.cut(end, 'pause');
+    if ((spoken >= this.softFrames && this.silence >= this.pauseFrames) || spoken >= this.hardFrames) return this.cut(end, 'longue réplique');
     return event;
   }
 
   /** Ferme la fenêtre à la position `at` et en ouvre une nouvelle. */
-  cut(at) {
+  cut(at, why) {
     const w = {
       type: 'cut', at: at, start: this.start, first: this.first, last: this.last,
-      voiced: this.voiced * 0.02, speech: this.voiced >= this.minVoiced
+      voiced: this.voiced * 0.02, speech: this.voiced >= this.minVoiced, why: why || 'arrêt'
     };
     this.reset(at);
     return w;
@@ -441,6 +465,8 @@ class Capture {
     this.pcm = new Int16Array(1600);
     this.fill = 0;
     this.events = [];
+    this.vad = [];         // parole (1) ou non (0) de chaque trame de 20 ms depuis le dernier morceau
+    this.vadEnd = 0;       // position de fin de la dernière de ces trames
     this.count = 0;
     this.retune(o.tuning, o.turns);
   }
@@ -449,14 +475,16 @@ class Capture {
     const self = this;
     this.seg = new Segmenter(tuning);
     this.segBase = this.pos;
-    this.seg.onFrame = function (keep, n) { self.frame(keep, self.segBase + n * 320); };
+    this.seg.onFrame = function (keep, n, db) { self.frame(db, self.segBase + n * 320); };
     this.turns = new Turns(turns);
     this.turns.reset(this.pos);
   }
 
-  frame(keep, end) {
+  frame(db, end) {
     if (!this.stream) return;
-    const e = this.turns.frame(keep, end);
+    const e = this.turns.frame(db, end);
+    this.vad.push(this.turns.lastKeep ? 1 : 0);
+    this.vadEnd = end;
     if (e) this.events.push(e);
   }
 
@@ -502,7 +530,10 @@ class Capture {
       data = this.pcm.slice(0, this.fill);
     }
     this.fill = 0;
-    this.post({ type: 'pcm', data: data, end: at }, [data.buffer]);
+    // Décisions parole / silence des trames finies depuis le morceau précédent (pour l'app).
+    const vad = Uint8Array.from(this.vad);
+    this.vad.length = 0;
+    this.post({ type: 'pcm', data: data, end: at, vad: vad, vadEnd: this.vadEnd }, [data.buffer]);
   }
 
   /** Commandes de l'app : stream (continu ou extraits), flush (rendre la phrase en cours), tune. */
