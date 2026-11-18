@@ -13,14 +13,15 @@ Interprète en direct, vietnamien du Centre vers le français, avec Gemini. S'ou
 ## Utilisation
 
 1. Ouvrir la page, coller la clé API Gemini (Réglages), toucher le micro.
-2. À chaque vraie pause (1 s), la phrase entière s'affiche, traduite, avec une lettre de couleur par personne (A, B, C…). Quand deux personnes enchaînent sans pause, chacune a sa propre ligne. L'anglais et le français ne sont pas traduits.
+2. Chaque réplique s'affiche entière, traduite, avec une lettre de couleur par personne (A, B, C…) : dès que la personne marque une vraie pause (1 s), ou dès qu'une autre personne prend la parole. L'anglais et le français ne sont pas traduits.
 3. Micro : celui de l'iPhone entend les voix autour de soi. Poser le téléphone entre les personnes, le bas (où est le micro) tourné vers elles. Les micros des AirPods visent la bouche de la personne qui les porte et entendent mal les autres.
-4. Réglages › Infos techniques indique l'état de l'écoute, la connexion à Gemini, l'audio, le gain du micro et la reconnaissance des voix.
+4. Réglages › Infos techniques indique l'état de l'écoute, la connexion à Gemini, l'audio, le gain du micro, la reconnaissance des voix, et un journal des 8 dernières répliques : durée, raison de la coupure, temps de transcription et de traduction, réponse vide ou erreur. Rien n'en sort de l'appareil.
 
 ## Trois modes d'écoute
 
-- **Phrase par phrase (par défaut)** : l'app découpe la conversation en phrases, bout à bout, sans trou entre elles. Chaque phrase parlée part en entier vers Gemini 3.5 Transcribe (`generateContent`, audio WAV 16 kHz dans la requête, avec une liste de mots du Centre et du Sud). Une requête indépendante par phrase : rien n'est perdu entre deux phrases, et le modèle entend toute la phrase. La transcription est ensuite traduite en texte par Gemini Flash. Si la liste de mots est refusée, l'app la retire ; si le modèle est indisponible, elle passe au mode par extraits.
-  - Plusieurs personnes à la suite dans la même phrase : l'app la coupe là où la voix change (voix reconnues sur l'appareil, tours d'au moins ~2 s, coupe au moment le plus calme) et transcrit et traduit chacune à part. La transcription de la phrase entière part en même temps et sert s'il n'y a qu'une voix : pas d'attente en plus.
+- **Phrase par phrase (par défaut)** : l'app découpe la conversation en répliques, bout à bout, sans trou entre elles. Chaque réplique part en entier vers Gemini 3.5 Transcribe (`generateContent`, audio WAV 16 kHz dans la requête, avec une liste de mots du Centre, du Sud et le prénom Léa) : une requête indépendante par réplique, donc rien n'est perdu entre deux, et le modèle entend toute la phrase. La transcription est ensuite traduite en texte par Gemini Flash. Si la liste de mots est refusée, l'app la retire ; si le modèle est indisponible, elle passe au mode par extraits.
+  - Une réplique se termine à une vraie pause (1 s), ou **dès qu'une autre voix prend la parole** : toutes les 0,75 s, l'empreinte vocale de la dernière 1,5 s de parole est calculée sur l'appareil, et deux fenêtres d'une autre voix suffisent (≈ 2 s) pour envoyer la réplique précédente, coupée au moment le plus calme entre les deux voix. Sans attendre de pause, donc, même quand les gens enchaînent.
+  - La parole est repérée par rapport au bruit de fond des 10 dernières secondes : une réponse plus faible qui suit une voix forte est entendue tout de suite.
 - **En direct** : le micro part en continu vers Gemini 3.5 Transcribe Live (WebSocket), qui écrit le vietnamien pendant qu'on parle. L'app découpe les phrases et l'indique au serveur (activité manuelle : `activityStart` / `activityEnd`), la détection de parole de Google étant coupée. Plus réactif, mais le serveur peut manquer le début d'une phrase juste après une pause.
   - Les sessions durent 10 minutes au plus : la suivante s'ouvre avant et prend le relais entre deux phrases. En cas de coupure réseau, l'audio est gardé et renvoyé.
   - Si le serveur refuse ces options, l'app retire d'abord la liste de mots, puis revient à la détection de Google (les morceaux qu'elle renvoie sont alors regroupés par phrase). Elle y revient aussi si le serveur ne répond à aucune phrase.
@@ -38,8 +39,8 @@ Réglages › Infos techniques indique le mode utilisé, et pourquoi il a chang�
 
 | Réglage | Fin de phrase | Long monologue |
 |---|---|---|
-| **Phrases complètes** (par défaut) | après 1 s de silence | coupé à la première petite pause passé 10 s de parole, au plus tard à 16 s |
-| **Rapide** | après 0,6 s de silence | coupé à la première petite pause passé 6 s de parole, au plus tard à 10 s |
+| **Phrases complètes** (par défaut) | après 1 s de silence, ou quand une autre voix prend la parole | coupé à la première petite pause passé 6 s de parole, au plus tard à 12 s |
+| **Rapide** | après 0,6 s de silence, ou quand une autre voix prend la parole | coupé à la première petite pause passé 4 s de parole, au plus tard à 8 s |
 
 Une hésitation plus courte reste dans la même phrase. Mêmes réglages en mode phrase par phrase et en direct ; en mode par extraits, ils attendent 0,7 s ou 0,45 s de silence.
 

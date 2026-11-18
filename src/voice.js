@@ -339,6 +339,46 @@ function quietest(x, lo, hi) {
   return best;
 }
 
+/**
+ * Changement de voix en cours de phrase, d'après les empreintes des fenêtres de 1,5 s calculées
+ * au fil de l'écoute (list : {c: centre en échantillons, e: empreinte normalisée}, depuis le début
+ * de la phrase). La voix du début est celle des premières fenêtres ; on cherche la première paire
+ * de fenêtres qui se ressemblent entre elles et nettement pas à ce début. Rend {lo, hi} : la zone
+ * où chercher le point de coupe (la fenêtre d'avant peut mêler les deux voix), ou null.
+ */
+function speakerChange(list, rate) {
+  const n = list.length;
+  if (n < 4) return null;
+  const dot = VoiceClusters.dot;
+  const mean = (items) => {
+    const sum = new Float32Array(items[0].e.length);
+    for (const it of items) for (let i = 0; i < sum.length; i++) sum[i] += it.e[i];
+    return VoiceClusters.normalize(sum);
+  };
+  const head = dot(list[0].e, list[1].e) >= 0.5 ? list.slice(0, 2) : list.slice(0, 3);
+  const start = mean(head);
+  // Voix déjà reconnues (identifiants de VoiceClusters, seuils adaptés à chaque voix) : deux
+  // fenêtres d'une autre voix que celle du début suffisent, même si les deux voix se ressemblent.
+  const startId = head[0].id !== undefined && head[0].id !== null && head.every((h) => h.id === head[0].id) ? head[0].id : null;
+  const lastId = list[n - 1].id;
+  if (startId !== null && lastId !== undefined && lastId !== null && lastId !== startId && list[n - 2].id === lastId) {
+    let j = head.length;
+    while (j < n - 1 && list[j].id !== lastId) j++;
+    return { lo: list[j - 1].c - 0.25 * rate, hi: list[j].c + 0.25 * rate };
+  }
+  for (let k = head.length; k + 1 < n; k++) {
+    if (dot(list[k].e, list[k + 1].e) < 0.5) continue;
+    const next = mean([list[k], list[k + 1]]);
+    if (dot(start, next) >= 0.4) continue;
+    // Point de bascule : la première fenêtre plus proche de la nouvelle voix que de celle du début
+    // (la détection peut arriver une fenêtre trop tard quand les deux voix se ressemblent un peu).
+    let j = head.length;
+    while (j < k && dot(list[j].e, start) >= dot(list[j].e, next)) j++;
+    return { lo: list[j - 1].c - 0.25 * rate, hi: list[j].c + 0.25 * rate };
+  }
+  return null;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { Fbank, voicedPart, VoiceClusters, voiceRuns, speakerParts, quietest };
+  module.exports = { Fbank, voicedPart, VoiceClusters, voiceRuns, speakerParts, quietest, speakerChange };
 }
