@@ -27,18 +27,25 @@ const store = {
   }
 };
 
+// Découpage des phrases (réglettes). L'ancien choix « Rapide » donne ses valeurs de départ.
+const CUT_DEFAULTS = { pause: 1.0, maxLen: 6 };
+const wasFast = store.get('cut', 'complete') === 'fast';
 const S = {
   apiKey: store.get('apiKey', ''),
   model: store.get('model', DEFAULT_MODEL),
   priority: store.get('priority', true),
   showVi: store.get('showVi', true),
-  cut: store.get('cut', 'complete'),
+  pause: store.get('pause', wasFast ? 0.6 : CUT_DEFAULTS.pause),
+  maxLen: store.get('maxLen', wasFast ? 4 : CUT_DEFAULTS.maxLen),
   listen: store.get('listen', 'phrases'),
   micId: store.get('micId', ''),
   micLabel: store.get('micLabel', ''),
   voices: store.get('voices', true)
 };
 if (!MODELS.some((m) => m.id === S.model)) S.model = DEFAULT_MODEL;
+const clampNum = (v, lo, hi, def) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
+S.pause = Math.round(clampNum(S.pause, 0.3, 2, CUT_DEFAULTS.pause) * 10) / 10;
+S.maxLen = Math.round(clampNum(S.maxLen, 3, 15, CUT_DEFAULTS.maxLen));
 function save(key, value) { S[key] = value; store.set(key, value); }
 
 function userText(all) {
@@ -494,6 +501,7 @@ function clearAll() {
   for (const line of lines) { line.dead = true; line.el = null; }
   lines.length = 0;
   voiceReset();
+  track.list = [];   // empreintes liées aux voix effacées
   if (live.win) live.win.line = null;
   for (const w of live.wins) w.line = null;
   liveHideInterim();
@@ -504,20 +512,6 @@ function clearAll() {
 }
 
 // ─── Traduction ──────────────────────────────────────────────────────────────
-function enqueue(samples) {
-  const line = {
-    id: ++lineSeq,
-    createdAt: Date.now(),
-    audio: toBase64(encodeWAV(samples, 16000)),
-    vi: '', fr: '',
-    status: 'waiting', error: '', autoRetry: false, voiceIds: null
-  };
-  lines.push(line);
-  mountLine(line);
-  translate(line);
-  voiceEmbed(line, samples);
-}
-
 function recentContext(line) {
   const index = lines.indexOf(line);
   const cutoff = line.createdAt - 180000;
@@ -563,8 +557,11 @@ async function translate(line) {
     tech.ttfb = first ? first - t0 : null;
     tech.total = performance.now() - t0;
     finishLine(line, raw);
+    if (line.log) Object.assign(line.log, { flash: tech.total, flashWords: line.dead ? 0 : wordCount(line.vi), error: '' });
+    if (line.rescue) phraseRescued(line);
     retryFailed();
   } catch (err) {
+    if (line.log) line.log.error = 'Flash\u00a0: ' + (err.status ? 'erreur ' + err.status : errorMessage(err));
     if (!line.dead) {
       // Clé refusée : l'audio est gardé et repartira dès qu'une clé valide sera enregistrée.
       Object.assign(line, { status: 'failed', error: errorMessage(err), autoRetry: isTransient(err) || isKeyError(err) });
@@ -606,8 +603,9 @@ function removeLine(line) {
 function retryLine(line) {
   if (line.status !== 'failed') return;
   if (line.kind === 'live') translateText(line);
-  else if (line.kind === 'phrase') { if (line.vi) translateText(line); else transcribePhrase(line); }
-  else translate(line);
+  else if (line.kind === 'phrase' && line.vi) translateText(line);
+  else if (line.kind === 'phrase' && engine !== 'clips') transcribePhrase(line);
+  else { line.kind = 'clip'; translate(line); }
 }
 
 /** Le réseau est revenu : on relance les phrases perdues pendant la coupure. */
@@ -672,6 +670,7 @@ self.onmessage = async (e) => {
   }
   if (m.type === 'embed1') {
     let e = null;
+    const t0 = performance.now();
     try {
       const { session } = await ready;
       const w = fb.windows(m.samples);
@@ -680,7 +679,7 @@ self.onmessage = async (e) => {
         e = out[session.outputNames[0]].data.slice();
       }
     } catch (err) { /* modèle indisponible */ }
-    postMessage({ type: 'embedding1', id: m.id, e });
+    postMessage({ type: 'embedding1', id: m.id, e, ms: performance.now() - t0 });
     return;
   }
   if (m.type === 'embed') {
@@ -763,6 +762,7 @@ function voiceMessage(m) {
   } else if (m.type === 'embedding1') {
     const target = voice.waiting.get(m.id);
     voice.waiting.delete(m.id);
+    if (m.e && typeof m.ms === 'number') track.ms = track.ms ? 0.8 * track.ms + 0.2 * m.ms : m.ms;
     if (target && target.track !== undefined) trackResult(target.track, m.e);
     return;
   } else if (m.type === 'embeddings') {
@@ -1132,20 +1132,18 @@ function liveFallback(reason) {
   clearTimeout(live.switchTimer);
   liveHideInterim();
   engine = 'clips';
-  capCommand({ type: 'stream', on: false });
-  // L'audio pas encore transcrit passe par le découpage habituel : rien n'est perdu.
-  const pending = live.queue.splice(0).filter((c) => c.data);
-  if (pending.length) {
-    const seg = new Segmenter(currentTuning());
-    for (const c of pending) {
-      const f = new Float32Array(c.data.length);
-      for (let i = 0; i < f.length; i++) f[i] = c.data[i] / 32768;
-      for (const out of seg.push(f)) enqueue(out);
-    }
-    const last = seg.flush();
-    if (last) enqueue(last);
-  }
-  showBanner('Écoute en direct indisponible (' + reason + "). L'app traduit par extraits, comme avant.");
+  // L'audio pas encore transcrit (phrase en cours, phrases restées sans réponse) est encore en
+  // mémoire : il part avec la prochaine phrase, par extraits. Rien n'est perdu.
+  let from = live.win ? live.win.start : ring.pos;
+  for (const w of live.wins) if (!w.sealed && !w.line && w.speech) from = Math.min(from, w.start);
+  const pending = live.queue.find((c) => c.data);
+  if (pending) from = Math.min(from, pending.end - pending.data.length);
+  live.queue = [];
+  if (live.win && live.win.line && !live.win.line.dead && live.win.line.status !== 'done') removeLine(live.win.line);
+  live.win = null;
+  pw.start = Math.max(from, ring.pos - 60 * RATE, 0);
+  track.next = ring.pos + 0.75 * RATE;
+  showBanner('Écoute en direct indisponible (' + reason + "). L'app traduit par extraits.");
   updateStatus();
 }
 
@@ -1357,12 +1355,12 @@ function ringFirstVoiced(a, b) {
   return -1;
 }
 
-// ─── Voix au fil de l'écoute (phrase par phrase) ─────────────────────────────
+// ─── Voix au fil de l'écoute (phrase par phrase, par extraits) ───────────────
 // Toutes les 0,75 s, l'empreinte vocale de la dernière 1,5 s de parole est calculée sur
-// l'appareil (≈ 20 ms). On sait ainsi à tout moment qui parle : quand une autre personne prend
-// la parole, la réplique précédente part tout de suite, sans attendre une pause ; et chaque ligne
-// reçoit la couleur de sa voix, sans calcul supplémentaire.
-const track = { next: 0, list: [], busy: 0 };
+// l'appareil. On sait ainsi à tout moment qui parle : quand une autre personne prend la parole,
+// la réplique précédente part tout de suite, sans attendre une pause ; et chaque ligne reçoit la
+// couleur de sa voix, sans calcul supplémentaire.
+const track = { next: 0, list: [], busy: 0, ms: 0 };
 function trackReset() { track.next = 1.5 * RATE; track.list = []; track.busy = 0; }
 
 function trackStep() {
@@ -1384,10 +1382,11 @@ function trackStep() {
 /** Empreinte de la fenêtre de 1,5 s finissant à `end`. */
 function trackResult(end, e) {
   track.busy = Math.max(0, track.busy - 1);
-  if (!e || engine !== 'phrases' || !listening) return;
+  if (!e || engine === 'live' || !listening) return;
   const entry = { c: end - 0.75 * RATE, e: VoiceClusters.normalize(e), id: voiceAssign([e])[0] };
   track.list.push(entry);
   while (track.list.length && end - track.list[0].c > 90 * RATE) track.list.shift();
+  trackColor(entry);
   // Une autre personne a pris la parole : la réplique précédente part tout de suite.
   const since = track.list.filter((t) => t.c - 0.75 * RATE >= pw.start);
   const change = speakerChange(since, RATE);
@@ -1398,18 +1397,47 @@ function trackResult(end, e) {
   const cut = Math.round(lo + quietest(audio, 0, audio.length));
   const from = pw.start;
   pw.start = cut;
+  capCommand({ type: 'rebase', at: cut });   // la réplique suivante compte sa durée depuis ici
   phraseEmit(from, cut, 'autre voix');
 }
 
-// ─── Phrase par phrase : Gemini 3.5 Transcribe ───────────────────────────────
+/** Lignes parties avant que les empreintes de leur voix soient prêtes : colorées dès qu'elles arrivent. */
+function trackColor(entry) {
+  for (let k = lines.length - 1, n = 0; k >= 0 && n < 10; k--, n++) {
+    const l = lines[k];
+    if (l.voiceIds || l.dead || !l.span || l.kind === 'live') continue;
+    if (entry.c < l.span[0] || entry.c >= l.span[1]) continue;
+    l.voiceIds = mainVoice(track.list.filter((t) => t.c >= l.span[0] && t.c < l.span[1]).map((t) => t.id));
+    if (l.voiceIds) render(l);
+  }
+}
+
+/**
+ * Ligne partie sans couleur : le suivi des voix la colore dès que ses empreintes arrivent. Sinon
+ * (suivi pas encore démarré, ou rien après 2,5 s), empreinte de la phrase entière : plus long,
+ * et pendant ce calcul le suivi des voix attend, d'où ce délai.
+ */
+function voiceLater(line) {
+  if (!S.voices || !voice.worker || voice.state === 'error') return;
+  if (voice.state !== 'ready') { liveVoice(line); return; }
+  setTimeout(() => { if (!line.voiceIds && !line.dead) liveVoice(line); }, 2500);
+}
+
+// ─── Phrase par phrase, par extraits ─────────────────────────────────────────
 // L'app découpe la conversation en répliques, bout à bout, sans trou : à chaque vraie pause
 // (fenêtres de Turns), et dès qu'une autre voix prend la parole. Chaque réplique part en entier
-// vers le modèle de transcription : une requête indépendante par réplique, donc rien n'est perdu
-// entre deux, et le modèle entend toute la phrase. Sa transcription est ensuite traduite en
-// texte. Si le modèle est indisponible : mode par extraits.
+// dans sa propre requête : rien n'est perdu entre deux, le modèle entend toute la phrase, et
+// les répliques avancent toutes en même temps, sans s'attendre.
+// - Phrase par phrase : Gemini 3.5 Transcribe écrit la réplique, puis le texte est traduit.
+// - Par extraits : Gemini Flash reçoit l'audio, transcrit et traduit d'un coup.
+// Si Gemini 3.5 Transcribe est indisponible, ou ne rend rien là où Flash entend des mots, la
+// suite passe par extraits, sans changer le découpage.
 const TRANSCRIBE_MODEL = 'gemini-3.5-transcribe';
-const phr = { vocab: true, note: '' };
-const pw = { start: 0 };   // début de la réplique en cours (position)
+// Langues attendues : le vietnamien, et l'anglais et le français, bien écrits pour être ensuite
+// laissés de côté par la traduction (sinon ils ressortent en faux vietnamien).
+const phr = { vocab: true, langs: ['vi-VN', 'en-US', 'fr-FR'], note: '', rescued: 0 };
+const pw = { start: 0 };     // début de la réplique en cours (position)
+const RESCUE_VOICED = 1.0;   // s de parole : au-delà, une transcription vide est vérifiée par Flash
 
 /** Fin de phrase repérée par Turns (pause, phrase trop longue, arrêt de l'écoute). */
 function phraseCut(c) {
@@ -1432,7 +1460,9 @@ function phraseEmit(a, b, why) {
   }
   for (const p of parts) {
     const part = parts.length > 1 ? samples.subarray(p.a, p.b) : samples;
-    phraseLine(toBase64(encodeWAV(part, RATE)), mainVoice(p.ids), [a + p.a, a + p.b], parts.length > 1 ? why + ' + autre voix' : why, part.length / RATE);
+    const span = [a + p.a, a + p.b];
+    const voiced = ringVoiced(span[0], span[1]) * part.length / RATE;
+    phraseLine(toBase64(encodeWAV(part, RATE)), mainVoice(p.ids), span, parts.length > 1 ? why + ' + autre voix' : why, part.length / RATE, voiced);
   }
 }
 
@@ -1447,26 +1477,37 @@ function mainVoice(ids) {
   return most >= 0.7 * known.length ? [main] : known;
 }
 
-function phraseLine(audio, ids, span, why, sec) {
+function phraseLine(audio, ids, span, why, sec, voiced) {
   const line = {
-    id: ++lineSeq, kind: 'phrase', createdAt: Date.now(), audio,
-    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false, voiceIds: ids && ids.length ? ids : null, span
+    id: ++lineSeq, kind: engine === 'clips' ? 'clip' : 'phrase', createdAt: Date.now(), audio,
+    vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false,
+    voiceIds: ids && ids.length ? ids : null, span, voiced: voiced || 0
   };
   journalAdd(line, why, sec);
   lines.push(line);
   mountLine(line);
-  transcribePhrase(line);
-  if (!line.voiceIds) liveVoice(line);
+  if (line.kind === 'clip') translate(line);
+  else transcribePhrase(line);
+  if (!line.voiceIds) voiceLater(line);
 }
 
 // ─── Journal des dernières répliques (Réglages › Infos techniques) ─────────────
-// Pour comprendre en situation réelle ce qui ralentit ou ce qui manque : durée, raison de la
-// coupure, temps de transcription et de traduction, réponse vide, erreur. Rien n'en sort de l'appareil.
+// Pour comprendre en situation réelle ce qui ralentit ou ce qui manque : durée, parole entendue,
+// raison de la coupure, temps de transcription et de traduction, réponse vide (et sa forme),
+// erreur. Rien n'en sort de l'appareil.
 const journal = [];
 function journalAdd(line, why, sec) {
-  line.log = { t: new Date(), sec, why, asr: null, words: null, tr: null, error: '' };
+  line.log = {
+    t: new Date(), sec, voiced: line.voiced, why, via: line.kind === 'clip' ? 'flash' : 'transcribe',
+    asr: null, asrError: '', words: null, shape: '', rescue: false, flash: null, flashWords: null, tr: null, error: ''
+  };
   journal.push(line.log);
   if (journal.length > 30) journal.shift();
+}
+
+function wordCount(text) {
+  const t = String(text || '').trim();
+  return t ? t.split(/\s+/).length : 0;
 }
 
 async function transcribePhrase(line) {
@@ -1483,12 +1524,21 @@ async function transcribePhrase(line) {
   updateStatus();
   const t0 = performance.now();
   try {
-    const text = await transcribe(line.audio);
+    const r = await transcribe(line.audio);
     tech.asr = performance.now() - t0;
-    const vi = String(text || '').replace(/\s+/g, ' ').trim();
-    if (line.log) Object.assign(line.log, { asr: tech.asr, words: vi && !isNoiseOnly(vi) ? vi.split(' ').length : 0, error: '' });
+    const vi = String(r.text || '').replace(/\s+/g, ' ').trim();
+    const words = isNoiseOnly(vi) ? 0 : wordCount(vi);
+    if (line.log) Object.assign(line.log, { asr: tech.asr, words, shape: words ? '' : r.shape, error: '' });
     if (line.dead) return;
-    if (!vi || isNoiseOnly(vi)) { removeLine(line); return; }   // bruit, silence : rien à traduire
+    if (!words) {
+      // Rien d'écrit : du bruit, le plus souvent. Mais si l'on a nettement entendu parler,
+      // Gemini Flash réécoute la phrase (transcription et traduction d'un coup).
+      line.transcribing = false;
+      if (line.voiced >= RESCUE_VOICED) phraseRescue(line);
+      else removeLine(line);
+      return;
+    }
+    phr.rescued = 0;
     line.vi = vi;
     line.audio = null;
     render(line);
@@ -1496,7 +1546,10 @@ async function transcribePhrase(line) {
     retryFailed();
   } catch (err) {
     if (line.dead) return;
-    if (line.log) line.log.error = 'transcription : ' + (err.status ? 'erreur ' + err.status : errorMessage(err));
+    if (line.log) {
+      line.log.asrError = err.status ? 'erreur ' + err.status : errorMessage(err);
+      line.log.error = 'transcription\u00a0: ' + line.log.asrError;
+    }
     if (err.fallback) { line.transcribing = false; phraseFallback(err); return; }
     Object.assign(line, { status: 'failed', error: errorMessage(err), autoRetry: isTransient(err) || isKeyError(err) });
     render(line);
@@ -1508,20 +1561,53 @@ async function transcribePhrase(line) {
   }
 }
 
-/** Transcription d'une phrase, avec nouvelles tentatives ; liste de mots retirée si refusée. */
+/** Gemini Flash réécoute une phrase que Gemini 3.5 Transcribe a rendue vide. */
+function phraseRescue(line) {
+  line.kind = 'clip';
+  line.rescue = true;
+  if (line.log) line.log.rescue = true;
+  translate(line);
+}
+
+/**
+ * Flash a entendu des mots là où Gemini 3.5 Transcribe n'a rien écrit. Deux fois de suite, sans
+ * transcription réussie entre les deux : Transcribe ne marche pas en ce moment, la suite part
+ * directement à Flash (même découpage).
+ */
+function phraseRescued(line) {
+  if (line.dead || isNoiseOnly(line.vi) || !wordCount(line.vi)) return;
+  if (++phr.rescued < 2 || engine !== 'phrases') return;
+  engine = 'clips';
+  phr.note = 'Gemini 3.5 Transcribe rendait des transcriptions vides là où Gemini Flash entendait des mots : les phrases partent à Flash';
+  showBanner("Gemini 3.5 Transcribe ne rend rien en ce moment : l'app passe par Gemini Flash, qui transcrit et traduit d'un coup.");
+  updateStatus();
+  if (!sheet.hidden) renderTech();
+}
+
+/**
+ * Transcription d'une phrase, avec nouvelles tentatives. Requête refusée (400) : on retire
+ * d'abord ce que le message d'erreur désigne, sinon le français, puis la liste de mots.
+ */
 async function transcribe(audio) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await transcribeOnce(audio, phr.vocab);
+      return await transcribeOnce(audio, phr.vocab, phr.langs);
     } catch (err) {
       if (err.kind === 'http' && !isKeyError(err) && (err.status === 400 || err.status === 404)) {
+        const vocabBlamed = /vocab/i.test(err.message);
+        if (err.status === 400 && phr.langs.length > 2 && !vocabBlamed) {
+          phr.langs = ['vi-VN', 'en-US'];
+          phr.note = 'français retiré des langues attendues (' + err.message.slice(0, 120) + ')';
+          attempt--;
+          continue;
+        }
         if (err.status === 400 && phr.vocab) {
           phr.vocab = false;
           phr.note = 'liste de mots refusée (' + err.message.slice(0, 120) + ')';
           attempt--;
           continue;
         }
-        err.fallback = true;   // modèle ou requête refusés : on passe au mode par extraits
+        err.fallback = true;   // modèle ou requête refusés : la suite part à Flash
         throw err;
       }
       if (attempt >= 3 || !isTransient(err)) throw err;
@@ -1530,8 +1616,8 @@ async function transcribe(audio) {
   }
 }
 
-async function transcribeOnce(audio, vocab) {
-  const config = { languageCodes: ['vi-VN', 'en-US'] };
+async function transcribeOnce(audio, vocab, langs) {
+  const config = { languageCodes: langs };
   if (vocab) config.customVocabulary = LIVE_VOCAB;
   const body = {
     contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: audio } }] }],
@@ -1560,21 +1646,43 @@ async function transcribeOnce(audio, vocab) {
   try { json = JSON.parse(raw); } catch (e) { throw new GemError('stream', 'réponse illisible'); }
   const c = json.candidates && json.candidates[0];
   if (!c && json.promptFeedback && json.promptFeedback.blockReason) throw new GemError('stream', 'contenu bloqué (' + json.promptFeedback.blockReason + ')');
-  const parts = c && c.content && Array.isArray(c.content.parts) ? c.content.parts : [];
-  return parts.filter((p) => typeof p.text === 'string' && !p.thought).map((p) => p.text).join(' ');
+  return transcriptOf(json);
 }
 
-/** Modèle de transcription indisponible : les phrases en attente et la suite passent par extraits. */
+/**
+ * Texte d'une réponse de Gemini 3.5 Transcribe. Le modèle le range dans une partie à part,
+ * `audioTranscription` (`text`, ou ses mots un par un), la partie `text` restant vide ; une
+ * partie `text` remplie ne sert qu'à défaut. `shape` décrit la réponse pour le journal.
+ */
+function transcriptOf(json) {
+  const c = json && json.candidates && json.candidates[0];
+  const parts = c && c.content && Array.isArray(c.content.parts) ? c.content.parts : [];
+  const heard = [], texts = [];
+  for (const p of parts) {
+    if (!p || p.thought) continue;
+    const t = p.audioTranscription;
+    if (t && typeof t.text === 'string' && t.text.trim()) heard.push(t.text.trim());
+    else if (t && Array.isArray(t.words) && t.words.length) {
+      heard.push(t.words.map((w) => (w && (w.word || w.text)) || '').join(' ').trim());
+    }
+    if (typeof p.text === 'string' && p.text.trim()) texts.push(p.text.trim());
+  }
+  const shape = (parts.length ? parts.map((p) => Object.keys(p || {}).join('+') || '{}').join(', ') : 'aucune partie') +
+    (c && c.finishReason ? ' · ' + c.finishReason : '');
+  return { text: (heard.length ? heard : texts).join(' '), shape };
+}
+
+/** Gemini 3.5 Transcribe refusé ou introuvable : les phrases en attente et la suite partent à Flash. */
 function phraseFallback(err) {
   if (engine === 'phrases') {
     engine = 'clips';
-    capCommand({ type: 'stream', on: false });
-    showBanner('Gemini 3.5 Transcribe indisponible (' + err.message.slice(0, 120) + "). L'app traduit par extraits.");
+    showBanner('Gemini 3.5 Transcribe indisponible (' + err.message.slice(0, 120) + "). L'app passe par Gemini Flash, qui transcrit et traduit d'un coup.");
   }
-  phr.note = 'transcription indisponible (' + err.message.slice(0, 120) + ')';
+  phr.note = 'Gemini 3.5 Transcribe indisponible (' + err.message.slice(0, 120) + ') : les phrases partent à Gemini Flash';
   for (const line of lines.slice()) {
     if (line.kind === 'phrase' && !line.vi && line.audio && !line.dead && !line.transcribing) {
       line.kind = 'clip';
+      if (line.log) line.log.rescue = true;
       translate(line);
     }
   }
@@ -1651,7 +1759,7 @@ async function translateText(line) {
     }
     retryFailed();
   } catch (err) {
-    if (line.log) line.log.error = 'traduction : ' + (err.status ? 'erreur ' + err.status : errorMessage(err));
+    if (line.log) line.log.error = 'traduction\u00a0: ' + (err.status ? 'erreur ' + err.status : errorMessage(err));
     if (!line.dead) {
       // Mise à jour ratée : l'ancienne traduction reste, la suivante réessaiera.
       if (update) line.status = 'done';
@@ -1692,28 +1800,12 @@ const WORKLET_SOURCE = [
 registerProcessor('td-capture', TDCapture);`
 ].join('\n');
 
-// Découpage : attendre une vraie pause donne des phrases entières (moins d'erreurs) ; le mode
-// rapide coupe plus tôt, au prix de phrases parfois tronquées. `tuning` règle le mode par
-// extraits (Segmenter), `turns` l'écoute continue (Turns).
-const CUTS = [
-  {
-    id: 'complete', title: 'Phrases complètes',
-    sub: 'Attend une vraie pause avant de traduire : phrases entières, la traduction arrive un peu plus tard (recommandé)',
-    tuning: { endSilence: 0.7, maxSegment: 8, cutSearchWindow: 2 },
-    turns: { endSilence: 1.0, softMax: 6, softPause: 0.25, hardMax: 12 }
-  },
-  {
-    id: 'fast', title: 'Rapide',
-    sub: 'Traduit dès une courte pause : plus réactif, mais phrases parfois coupées',
-    tuning: {},
-    turns: { endSilence: 0.6, softMax: 4, softPause: 0.2, hardMax: 8 }
-  }
-];
-function currentCut() {
-  return CUTS.find((c) => c.id === S.cut) || CUTS[0];
+// Découpage (réglettes, mêmes valeurs dans les trois modes) : une phrase part après `pause`
+// secondes de silence ; un long monologue part à la première petite pause passé `maxLen`
+// secondes de parole, au plus tard au double. Une autre voix coupe aussi la phrase.
+function currentTurns() {
+  return { endSilence: S.pause, softMax: S.maxLen, softPause: Math.min(0.25, S.pause / 2), hardMax: 2 * S.maxLen };
 }
-function currentTuning() { return currentCut().tuning; }
-function currentTurns() { return currentCut().turns; }
 
 /** Commande pour la chaîne du micro, qu'elle tourne dans l'AudioWorklet ou en secours. */
 function capCommand(m) {
@@ -1721,9 +1813,9 @@ function capCommand(m) {
   else if (cap.feed) cap.feed.command(m);
 }
 
-/** Change le découpage pendant l'écoute : la phrase en cours part telle quelle. */
+/** Nouveau découpage pendant l'écoute : il vaut tout de suite, phrase en cours comprise. */
 function applyTuning() {
-  if (listening) capCommand({ type: 'tune', tuning: currentTuning(), turns: currentTurns() });
+  if (listening) capCommand({ type: 'tune', turns: currentTurns() });
 }
 
 const cap = { ctx: null, stream: null, src: null, node: null, sp: null, feed: null, sink: null, url: '', lastAudio: 0, failures: 0 };
@@ -1738,10 +1830,9 @@ function onCapture(msg) {
   cap.lastAudio = performance.now();
   if (document.hidden) heardWhileHidden = true;
   if (msg.type === 'level') { setLevel(msg.v); tech.gain = msg.gain; }
-  else if (msg.type === 'pcm') { ringPush(msg); if (engine === 'live') liveSend(msg); else if (engine === 'phrases') trackStep(); }
-  else if (msg.type === 'cut') { if (engine === 'live') liveCut(msg); else if (engine === 'phrases') phraseCut(msg); }
+  else if (msg.type === 'pcm') { ringPush(msg); if (engine === 'live') liveSend(msg); else trackStep(); }
+  else if (msg.type === 'cut') { if (engine === 'live') liveCut(msg); else phraseCut(msg); }
   else if (msg.type === 'speech') { if (engine === 'live') liveSpeech(msg); }
-  else if (msg.type === 'segment') { if (engine === 'clips') enqueue(msg.samples); }
   else if (msg.type === 'flushed') {
     const done = flushWaiters.get(msg.id);
     flushWaiters.delete(msg.id);
@@ -1788,7 +1879,7 @@ async function buildGraph(ctx) {
       const node = new AudioWorkletNode(ctx, 'td-capture', {
         numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
         channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers',
-        processorOptions: { tuning: currentTuning(), turns: currentTurns(), stream: engine !== 'clips' }
+        processorOptions: { turns: currentTurns(), stream: true }
       });
       node.port.onmessage = (e) => onCapture(e.data);
       node.connect(cap.sink);
@@ -1802,7 +1893,7 @@ async function buildGraph(ctx) {
     // Secours : même traitement, sur le thread principal.
     const sp = ctx.createScriptProcessor(2048, 1, 1);
     const rs = new Resampler(ctx.sampleRate, 16000);
-    const feed = new Capture({ tuning: currentTuning(), turns: currentTurns(), stream: engine !== 'clips' }, (m) => onCapture(m));
+    const feed = new Capture({ turns: currentTurns(), stream: true }, (m) => onCapture(m));
     cap.feed = feed;
     sp.onaudioprocess = (e) => {
       if (cap.feed === feed) feed.process(rs.process(e.inputBuffer.getChannelData(0)));
@@ -1868,6 +1959,8 @@ async function startListening() {
   ringReset();
   trackReset();
   pw.start = 0;
+  phr.rescued = 0;
+  phr.note = '';
   updateStatus();
   lockScreen();   // demandé pendant le toucher : Safari l'accorde plus volontiers
   // L'AudioContext doit naître pendant le toucher (règle de Safari), avant toute attente.
@@ -2109,9 +2202,9 @@ $('pasteBtn').addEventListener('click', async () => {
 });
 
 const ENGINES = [
-  { id: 'phrases', title: 'Phrase par phrase', sub: "L'app découpe la conversation en phrases, sans rien laisser de côté. Chaque phrase est transcrite en entier par Gemini 3.5 Transcribe, puis traduite. Le plus fiable (recommandé)." },
-  { id: 'live', title: 'En direct', sub: "Gemini 3.5 Transcribe Live écrit le vietnamien pendant qu'on parle. Plus réactif, mais il peut manquer le début d'une phrase après une pause." },
-  { id: 'clips', title: 'Par extraits', sub: "L'ancien mode : chaque phrase est envoyée en audio à Gemini Flash, qui transcrit et traduit d'un coup." }
+  { id: 'phrases', title: 'Phrase par phrase', sub: "L'app découpe la conversation en phrases, sans rien laisser de côté. Chaque phrase est écrite mot à mot par Gemini 3.5 Transcribe, puis traduite. Le plus fidèle (recommandé)." },
+  { id: 'clips', title: 'Par extraits', sub: "Même découpage. Chaque phrase part en audio au modèle choisi plus haut, qui transcrit et traduit d'un coup : une étape de moins." },
+  { id: 'live', title: 'En direct', sub: "Gemini 3.5 Transcribe Live écrit le vietnamien pendant qu'on parle. Plus réactif, mais il peut manquer le début d'une phrase après une pause." }
 ];
 function renderEngines() {
   const box = $('engineChoices');
@@ -2141,32 +2234,36 @@ function renderEngines() {
   $('engineNote').hidden = true;
 }
 
+// Réglettes du découpage : elles valent tout de suite, même pendant l'écoute.
+const pauseRange = $('pauseRange');
+const maxRange = $('maxRange');
 function renderCuts() {
-  const box = $('cutChoices');
-  box.textContent = '';
-  for (const c of CUTS) {
-    const label = document.createElement('label');
-    label.className = 'choice';
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'cut';
-    input.value = c.id;
-    input.id = 'cut-' + c.id;
-    input.checked = c.id === (CUTS.find((x) => x.id === S.cut) || CUTS[0]).id;
-    input.addEventListener('change', () => {
-      save('cut', c.id);
-      applyTuning();
-    });
-    const text = document.createElement('span');
-    const title = document.createElement('b');
-    title.textContent = c.title;
-    const sub = document.createElement('small');
-    sub.textContent = c.sub;
-    text.append(title, sub);
-    label.append(input, text);
-    box.appendChild(label);
-  }
+  pauseRange.value = String(S.pause);
+  maxRange.value = String(S.maxLen);
+  showCuts();
 }
+function showCuts() {
+  $('pauseOut').textContent = S.pause.toFixed(1).replace('.', ',') + ' s';
+  $('maxOut').textContent = S.maxLen + ' s';
+  $('maxSub').textContent = 'Passé ' + S.maxLen + ' s de parole, la phrase part à la première petite pause, au plus tard à ' + 2 * S.maxLen + ' s.';
+  $('cutReset').disabled = S.pause === CUT_DEFAULTS.pause && S.maxLen === CUT_DEFAULTS.maxLen;
+}
+pauseRange.addEventListener('input', () => {
+  save('pause', Math.round(Number(pauseRange.value) * 10) / 10);
+  showCuts();
+  applyTuning();
+});
+maxRange.addEventListener('input', () => {
+  save('maxLen', Math.round(Number(maxRange.value)));
+  showCuts();
+  applyTuning();
+});
+$('cutReset').addEventListener('click', () => {
+  save('pause', CUT_DEFAULTS.pause);
+  save('maxLen', CUT_DEFAULTS.maxLen);
+  renderCuts();
+  applyTuning();
+});
 
 function renderModels() {
   const box = $('modelChoices');
@@ -2243,14 +2340,16 @@ function seconds(ms) {
 }
 
 function liveStatusText() {
-  if (listening && engine === 'phrases') return 'phrase par phrase · Gemini 3.5 Transcribe' + (phr.vocab ? '' : ' (sans liste de mots)');
+  if (listening && engine === 'phrases') return 'phrase par phrase · Gemini 3.5 Transcribe, puis traduction par ' + currentModel().sub.split(' · ')[0] + (phr.vocab ? '' : ' (sans liste de mots)');
   if (engine === 'live' && live.on) {
     if (live.state === 'connected') return 'en direct · Gemini 3.5 Transcribe Live connecté · phrases découpées par ' + (LIVE_LEVELS[live.level].manual ? "l'app" : 'Google');
     if (live.state === 'reconnecting') return 'en direct · reconnexion (' + live.error + ')';
     return 'en direct · connexion…';
   }
-  if (live.state === 'error') return 'par extraits (en direct indisponible : ' + live.error + ')';
-  if (phr.note && engine === 'clips' && S.listen === 'phrases') return 'par extraits (' + phr.note + ')';
+  if (listening && engine === 'clips') {
+    const why = S.listen === 'live' && live.state === 'error' ? ' (en direct indisponible : ' + live.error + ')' : S.listen === 'phrases' && phr.note ? ' (' + phr.note + ')' : '';
+    return 'par extraits · ' + currentModel().sub.split(' · ')[0] + ' transcrit et traduit' + why;
+  }
   return ({ phrases: 'phrase par phrase', live: 'en direct', clips: 'par extraits' }[S.listen] || 'phrase par phrase') + ' (au démarrage de l\'écoute)';
 }
 
@@ -2260,7 +2359,29 @@ function voiceStatus() {
   if (voice.state === 'loading') return 'chargement du modèle…';
   if (voice.state === 'error') return 'indisponibles : ' + voice.error;
   const n = voice.clusters.list.length;
-  return (n ? n + ' voix reconnue' + (n > 1 ? 's' : '') : 'prêtes') + ' · modèle ' + (voice.size / 1e6).toFixed(1).replace('.', ',') + '\u00a0Mo' + (voice.ms ? ' · ' + Math.round(voice.ms) + '\u00a0ms par phrase' : '');
+  const parts = [n ? n + ' voix reconnue' + (n > 1 ? 's' : '') : 'prêtes', 'modèle ' + (voice.size / 1e6).toFixed(1).replace('.', ',') + ' Mo'];
+  // Suivi : une empreinte toutes les 0,75 s. Plus lent que ça, l'appareil en saute.
+  if (track.ms) parts.push('suivi ' + Math.round(track.ms) + ' ms par empreinte' + (track.ms > 700 ? ' (appareil lent : changement de voix repéré plus tard)' : ''));
+  if (voice.ms) parts.push('phrase entière ' + Math.round(voice.ms) + ' ms');
+  return parts.join(' · ');
+}
+
+/** Une ligne du journal : durée, parole entendue, coupure, transcription, Flash, traduction. */
+function journalText(j) {
+  const plural = (n, w) => n + '\u00a0' + w + (n > 1 ? 's' : '');
+  const parts = [seconds(j.sec * 1000) + (j.voiced ? ' (parole ' + seconds(j.voiced * 1000) + ')' : ''), 'coupée\u00a0: ' + j.why];
+  if (j.via === 'transcribe') {
+    parts.push(j.asr === null ? (j.asrError ? (j.error ? '' : 'transcription\u00a0: ' + j.asrError) : j.error ? '' : 'transcription…')
+      : 'transcription ' + seconds(j.asr) + (j.words ? ' (' + plural(j.words, 'mot') + ')' : ' (vide' + (j.shape ? '\u00a0: ' + j.shape : '') + ')'));
+  }
+  if (j.via === 'flash' || j.rescue) {
+    const label = j.rescue ? 'réécoutée par Flash' : 'Flash';
+    parts.push(j.flash === null ? (j.error ? '' : label + '…')
+      : label + ' ' + seconds(j.flash) + (j.flashWords ? ' (' + plural(j.flashWords, 'mot') + ')' : ' (rien entendu)'));
+  }
+  if (j.tr !== null) parts.push('traduction ' + seconds(j.tr));
+  if (j.error) parts.push(j.error);
+  return parts.filter(Boolean).join(' · ');
 }
 
 function renderTech() {
@@ -2271,6 +2392,7 @@ function renderTech() {
     ['Gain du micro', typeof tech.gain === 'number' ? (tech.gain >= 0 ? '+' : '−') + Math.abs(Math.round(tech.gain)) + ' dB, automatique' : 'automatique (×16 au plus par phrase)'],
     ['Dernière phrase', tech.total ? (tech.asr ? 'transcription ' + seconds(tech.asr) + ' · ' : '') + (tech.ttfb ? 'premiers mots ' + seconds(tech.ttfb) + ' · ' : '') + 'traduction ' + seconds(tech.total) : '—'],
     ['Écran allumé', 'wakeLock' in navigator ? (wakeLock ? 'actif' : 'pendant l\'écoute') : 'non pris en charge'],
+    ['Découpage', 'fin de phrase après ' + seconds(S.pause * 1000) + ' de silence · réplique longue coupée vers ' + S.maxLen + ' s (au plus ' + 2 * S.maxLen + ' s)'],
     ['Voix', voiceStatus()]
   ];
   if (tech.probe && !tech.probe.ok) rows.push(['Dernier test', errorMessage(tech.probe.err)]);
@@ -2279,14 +2401,7 @@ function renderTech() {
   if (tech.note) rows.push(['Note', tech.note]);
   // Dernières répliques, de la plus récente à la plus ancienne.
   for (const j of journal.slice(-8).reverse()) {
-    const hh = j.t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const parts = [seconds(j.sec * 1000), 'coupée : ' + j.why];
-    if (j.error) parts.push(j.error);
-    else {
-      parts.push(j.asr === null ? 'transcription…' : 'transcription ' + seconds(j.asr) + (j.words ? ' (' + j.words + ' mots)' : ' (vide)'));
-      if (j.tr !== null) parts.push('traduction ' + seconds(j.tr));
-    }
-    rows.push([hh, parts.join(' · ')]);
+    rows.push([j.t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), journalText(j)]);
   }
   const dl = $('techInfo');
   dl.textContent = '';

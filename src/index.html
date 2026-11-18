@@ -114,7 +114,20 @@
       <section class="group" id="cutGroup">
         <h3>Découpage des phrases</h3>
         <div class="panel">
-          <div class="choices" id="cutChoices" role="radiogroup" aria-label="Découpage des phrases"></div>
+          <label class="slider" for="pauseRange">
+            <span class="slider-head"><b>Fin de phrase</b><output id="pauseOut" for="pauseRange">1,0 s</output></span>
+            <input type="range" id="pauseRange" min="0.3" max="2" step="0.1" aria-describedby="pauseSub">
+            <small id="pauseSub">Silence après lequel la phrase part. Plus court : plus réactif, mais une phrase peut partir en deux morceaux. Quand une autre voix prend la parole, la phrase part sans attendre.</small>
+          </label>
+          <label class="slider" for="maxRange">
+            <span class="slider-head"><b>Réplique longue</b><output id="maxOut" for="maxRange">6 s</output></span>
+            <input type="range" id="maxRange" min="3" max="15" step="1" aria-describedby="maxSub">
+            <small id="maxSub">Passé 6 s de parole, la phrase part à la première petite pause, au plus tard à 12 s.</small>
+          </label>
+          <div class="row-btns">
+            <button type="button" class="small-btn" id="cutReset">Valeurs par défaut</button>
+            <span class="note">S'applique tout de suite, même pendant l'écoute.</span>
+          </div>
         </div>
       </section>
 
@@ -152,7 +165,7 @@
         <div class="panel"><dl id="techInfo"></dl></div>
       </section>
 
-      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.4</p>
+      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Thông Dịch web 2.5</p>
     </div>
   </section>
 </div>
