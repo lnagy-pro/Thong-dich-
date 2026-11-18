@@ -75,7 +75,63 @@ class GemError extends Error {
     super(message || kind);
     this.kind = kind;       // http | stream | empty | network | timeout
     this.status = status || 0;
+    this.quota = null;      // limite atteinte (429) : voir quotaInfo
   }
+}
+
+/** Erreur HTTP de Gemini, avec le détail de la limite atteinte s'il s'agit d'un 429. */
+function httpError(raw, status) {
+  const err = new GemError('http', errorText(raw), status);
+  if (status === 429) err.quota = quotaInfo(raw);
+  return err;
+}
+
+/**
+ * Limite atteinte (429) : par minute ou par jour, sa valeur, le délai conseillé avant de
+ * réessayer, et s'il s'agit de l'offre gratuite (facturation non activée).
+ */
+function quotaInfo(raw) {
+  const q = { perDay: false, perMinute: false, free: false, limit: 0, retryMs: 0 };
+  let e = null;
+  try { const j = JSON.parse(raw); e = (Array.isArray(j) ? j[0] : j).error || null; } catch (x) { /* pas du JSON */ }
+  const msg = String((e && e.message) || raw || '');
+  const ids = [msg];
+  for (const d of (e && Array.isArray(e.details) ? e.details : [])) {
+    for (const v of (d && Array.isArray(d.violations) ? d.violations : [])) {
+      ids.push(String(v.quotaId || '') + ' ' + String(v.quotaMetric || ''));
+      if (!q.limit && Number(v.quotaValue)) q.limit = Number(v.quotaValue);
+    }
+    if (d && typeof d.retryDelay === 'string' && !q.retryMs) q.retryMs = Math.round(parseFloat(d.retryDelay) * 1000) || 0;
+  }
+  const all = ids.join(' ');
+  q.perDay = /per.?day/i.test(all);
+  q.perMinute = /per.?minute/i.test(all);
+  q.free = /free.?tier/i.test(all);
+  const lim = msg.match(/limit:\s*(\d+)/i);
+  if (lim && !q.limit) q.limit = Number(lim[1]);
+  const wait = msg.match(/retry in\s*([\d.]+)\s*s/i);
+  if (wait && !q.retryMs) q.retryMs = Math.round(parseFloat(wait[1]) * 1000);
+  return q;
+}
+
+/** Prochaine remise à zéro des limites par jour : minuit, heure de Californie. */
+function quotaReset(t) {
+  const day = 86400000;
+  const base = Math.floor(t / day) * day;
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hourCycle: 'h23' });
+    for (let k = 0; k < 3; k++) {
+      for (const h of [7, 8]) {
+        const c = base + k * day + h * 3600000;
+        if (c > t && Number(fmt.format(new Date(c))) === 0) return c;
+      }
+    }
+  } catch (x) { /* fuseau inconnu : 8 h UTC */ }
+  return base + 8 * 3600000 > t ? base + 8 * 3600000 : base + day + 8 * 3600000;
+}
+
+function clockTime(t) {
+  return new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function currentModel() { return MODELS.find((m) => m.id === S.model) || MODELS[1]; }
@@ -173,7 +229,7 @@ async function streamOnce(cfg, opts) {
     }
     if (!res.ok) {
       const raw = await res.text().catch(() => '');
-      throw new GemError('http', errorText(raw), res.status);
+      throw httpError(raw, res.status);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -264,7 +320,13 @@ function errorMessage(err) {
       if (/referer|referrer/i.test(err.message)) return "Cette clé n'accepte pas les appels depuis ce site : ajoutez l'adresse de la page dans ses restrictions (Google Cloud).";
       if (isKeyError(err)) return err.status === 400 ? 'Clé API invalide : vérifiez-la dans les réglages.' : 'Clé API refusée : vérifiez-la dans les réglages.';
       if (err.status === 404) return 'Modèle introuvable : choisissez-en un autre dans les réglages.';
-      if (err.status === 429) return 'Quota Gemini atteint. Activez la facturation sur le projet de la clé (Google AI Studio).';
+      if (err.status === 429) {
+        // La facturation n'est en cause que pour l'offre gratuite ; sinon, c'est la limite du modèle.
+        const q = err.quota || {};
+        if (q.free) return "Quota gratuit de Gemini atteint : activez la facturation sur le projet de la clé (Google AI Studio).";
+        if (q.perDay) return 'Limite par jour de ce modèle Gemini atteinte' + (q.limit ? ' (' + q.limit + ' requêtes)' : '') + ' : remise à zéro à ' + clockTime(quotaReset(Date.now())) + '.';
+        return 'Trop de requêtes par minute pour ce modèle Gemini' + (q.limit ? ' (limite : ' + q.limit + ')' : '') + '. Nouvel essai automatique.';
+      }
       if (err.status >= 500) return 'Gemini est momentanément indisponible.';
       return 'Erreur Gemini ' + err.status + ' : ' + err.message;
     default: return String(err.message || err);
@@ -604,7 +666,7 @@ function retryLine(line) {
   if (line.status !== 'failed') return;
   if (line.kind === 'live') translateText(line);
   else if (line.kind === 'phrase' && line.vi) translateText(line);
-  else if (line.kind === 'phrase' && engine !== 'clips') transcribePhrase(line);
+  else if (line.kind === 'phrase' && engine !== 'clips' && canTranscribe()) transcribePhrase(line);
   else { line.kind = 'clip'; translate(line); }
 }
 
@@ -1432,10 +1494,21 @@ function voiceLater(line) {
 // - Par extraits : Gemini Flash reçoit l'audio, transcrit et traduit d'un coup.
 // Si Gemini 3.5 Transcribe est indisponible, ou ne rend rien là où Flash entend des mots, la
 // suite passe par extraits, sans changer le découpage.
+// Gemini 3.5 Transcribe a des limites basses (au palier 1 : 10 requêtes par minute, 100 par
+// jour) : au-delà, chaque réplique part directement à Flash, et l'app tient le compte pour ne pas
+// dépasser la limite apprise du premier refus (429). Une réplique refusée, ou trop longue à
+// revenir, est reprise par Flash tout de suite : aucune ne reste en échec pour une limite.
 const TRANSCRIBE_MODEL = 'gemini-3.5-transcribe';
 // Langues attendues : le vietnamien, et l'anglais et le français, bien écrits pour être ensuite
 // laissés de côté par la traduction (sinon ils ressortent en faux vietnamien).
-const phr = { vocab: true, langs: ['vi-VN', 'en-US', 'fr-FR'], note: '', rescued: 0 };
+const phr = {
+  vocab: true, langs: ['vi-VN', 'en-US', 'fr-FR'], note: '', rescued: 0,
+  sent: [],                                   // envois des 60 dernières secondes
+  rpm: 0,                                     // limite par minute apprise d'un refus (0 : inconnue)
+  pausedUntil: store.get('transcribePause', 0), // limite atteinte : Flash seul jusqu'à cette heure
+  quota: ''                                   // dernière limite atteinte, pour Infos techniques
+};
+if (phr.pausedUntil > Date.now()) phr.quota = 'limite par jour atteinte';
 const pw = { start: 0 };     // début de la réplique en cours (position)
 const RESCUE_VOICED = 1.0;   // s de parole : au-delà, une transcription vide est vérifiée par Flash
 
@@ -1478,12 +1551,15 @@ function mainVoice(ids) {
 }
 
 function phraseLine(audio, ids, span, why, sec, voiced) {
+  // Limite de Gemini 3.5 Transcribe atteinte : la réplique part directement à Flash.
+  const overQuota = engine === 'phrases' && !canTranscribe();
   const line = {
-    id: ++lineSeq, kind: engine === 'clips' ? 'clip' : 'phrase', createdAt: Date.now(), audio,
+    id: ++lineSeq, kind: engine === 'clips' || overQuota ? 'clip' : 'phrase', createdAt: Date.now(), audio,
     vi: '', fr: '', doneVi: '', status: 'waiting', error: '', autoRetry: false,
-    voiceIds: ids && ids.length ? ids : null, span, voiced: voiced || 0
+    voiceIds: ids && ids.length ? ids : null, span, voiced: voiced || 0, sec
   };
   journalAdd(line, why, sec);
+  if (overQuota && line.log) line.log.quota = true;
   lines.push(line);
   mountLine(line);
   if (line.kind === 'clip') translate(line);
@@ -1498,8 +1574,8 @@ function phraseLine(audio, ids, span, why, sec, voiced) {
 const journal = [];
 function journalAdd(line, why, sec) {
   line.log = {
-    t: new Date(), sec, voiced: line.voiced, why, via: line.kind === 'clip' ? 'flash' : 'transcribe',
-    asr: null, asrError: '', words: null, shape: '', rescue: false, flash: null, flashWords: null, tr: null, error: ''
+    t: new Date(), sec, voiced: line.voiced, why, via: line.kind === 'clip' ? 'flash' : 'transcribe', quota: false,
+    asr: null, asrError: '', words: null, shape: '', rescue: '', flash: null, flashWords: null, tr: null, error: ''
   };
   journal.push(line.log);
   if (journal.length > 30) journal.shift();
@@ -1524,7 +1600,7 @@ async function transcribePhrase(line) {
   updateStatus();
   const t0 = performance.now();
   try {
-    const r = await transcribe(line.audio);
+    const r = await transcribe(line.audio, line.sec || 10);
     tech.asr = performance.now() - t0;
     const vi = String(r.text || '').replace(/\s+/g, ' ').trim();
     const words = isNoiseOnly(vi) ? 0 : wordCount(vi);
@@ -1534,7 +1610,7 @@ async function transcribePhrase(line) {
       // Rien d'écrit : du bruit, le plus souvent. Mais si l'on a nettement entendu parler,
       // Gemini Flash réécoute la phrase (transcription et traduction d'un coup).
       line.transcribing = false;
-      if (line.voiced >= RESCUE_VOICED) phraseRescue(line);
+      if (line.voiced >= RESCUE_VOICED) phraseRescue(line, 'vide');
       else removeLine(line);
       return;
     }
@@ -1551,6 +1627,14 @@ async function transcribePhrase(line) {
       line.log.error = 'transcription\u00a0: ' + line.log.asrError;
     }
     if (err.fallback) { line.transcribing = false; phraseFallback(err); return; }
+    const offline = err.kind === 'network' && navigator.onLine === false;
+    if (!isKeyError(err) && !offline) {
+      // Limite atteinte, délai dépassé, serveur occupé : Flash reprend la réplique tout de suite.
+      if (err.status === 429) transcribeQuota(err.quota || {});
+      line.transcribing = false;
+      phraseRescue(line, err.status === 429 ? 'limite' : 'erreur');
+      return;
+    }
     Object.assign(line, { status: 'failed', error: errorMessage(err), autoRetry: isTransient(err) || isKeyError(err) });
     render(line);
     if (isKeyError(err)) showBanner(errorMessage(err));
@@ -1561,12 +1645,47 @@ async function transcribePhrase(line) {
   }
 }
 
-/** Gemini Flash réécoute une phrase que Gemini 3.5 Transcribe a rendue vide. */
-function phraseRescue(line) {
+/** Gemini Flash reprend une réplique que Gemini 3.5 Transcribe a rendue vide (`vide`), a refusée pour une limite (`limite`) ou n'a pas su rendre (`erreur`). */
+function phraseRescue(line, why) {
   line.kind = 'clip';
-  line.rescue = true;
-  if (line.log) line.log.rescue = true;
+  line.rescue = why;
+  if (line.log) line.log.rescue = why;
   translate(line);
+}
+
+/** Gemini 3.5 Transcribe peut-il prendre une réplique de plus sans dépasser sa limite ? */
+function canTranscribe() {
+  const now = Date.now();
+  if (now < phr.pausedUntil) return false;
+  while (phr.sent.length && now - phr.sent[0] > 60000) phr.sent.shift();
+  return !phr.rpm || phr.sent.length < Math.max(1, phr.rpm - 1);   // une requête de marge
+}
+
+/** Refus pour limite atteinte (429) : par jour, Flash seul jusqu'à la remise à zéro ; par minute, on retient la limite. */
+function transcribeQuota(q) {
+  const now = Date.now();
+  if (q.perDay) {
+    phr.pausedUntil = quotaReset(now);
+    phr.quota = 'limite par jour atteinte' + (q.limit ? ' (' + q.limit + ' requêtes)' : '');
+    store.set('transcribePause', phr.pausedUntil);
+  } else {
+    const recent = phr.sent.filter((t) => now - t < 60000).length;
+    phr.rpm = q.limit || phr.rpm || Math.max(1, recent - 1);
+    phr.pausedUntil = now + Math.min(60000, q.retryMs || 15000);
+    phr.quota = 'limite de ' + phr.rpm + ' requêtes par minute';
+  }
+  if (!sheet.hidden) renderTech();
+}
+
+/** État de Gemini 3.5 Transcribe pour Infos techniques. */
+function transcribeStatus() {
+  const now = Date.now();
+  const n = phr.sent.filter((t) => now - t < 60000).length;
+  const parts = [n + ' requête' + (n > 1 ? 's' : '') + ' dans la dernière minute' + (phr.rpm ? ' sur ' + phr.rpm + ' permises' : '')];
+  if (phr.quota) parts.push(phr.quota);
+  if (now < phr.pausedUntil) parts.push('répliques envoyées à Flash jusqu\'à ' + clockTime(phr.pausedUntil));
+  else if (phr.rpm) parts.push('au-delà, répliques envoyées à Flash');
+  return parts.join(' · ');
 }
 
 /**
@@ -1575,7 +1694,7 @@ function phraseRescue(line) {
  * directement à Flash (même découpage).
  */
 function phraseRescued(line) {
-  if (line.dead || isNoiseOnly(line.vi) || !wordCount(line.vi)) return;
+  if (line.rescue !== 'vide' || line.dead || isNoiseOnly(line.vi) || !wordCount(line.vi)) return;
   if (++phr.rescued < 2 || engine !== 'phrases') return;
   engine = 'clips';
   phr.note = 'Gemini 3.5 Transcribe rendait des transcriptions vides là où Gemini Flash entendait des mots : les phrases partent à Flash';
@@ -1585,13 +1704,14 @@ function phraseRescued(line) {
 }
 
 /**
- * Transcription d'une phrase, avec nouvelles tentatives. Requête refusée (400) : on retire
- * d'abord ce que le message d'erreur désigne, sinon le français, puis la liste de mots.
+ * Transcription d'une phrase. Requête refusée (400) : on retire d'abord ce que le message
+ * d'erreur désigne, sinon le français, puis la liste de mots. Limite atteinte (429) ou délai
+ * dépassé : pas de nouvel essai, Flash reprend la réplique ; serveur en erreur : un seul.
  */
-async function transcribe(audio) {
+async function transcribe(audio, sec) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await transcribeOnce(audio, phr.vocab, phr.langs);
+      return await transcribeOnce(audio, phr.vocab, phr.langs, Math.max(8000, 4000 + sec * 1000));
     } catch (err) {
       if (err.kind === 'http' && !isKeyError(err) && (err.status === 400 || err.status === 404)) {
         const vocabBlamed = /vocab/i.test(err.message);
@@ -1610,13 +1730,13 @@ async function transcribe(audio) {
         err.fallback = true;   // modèle ou requête refusés : la suite part à Flash
         throw err;
       }
-      if (attempt >= 3 || !isTransient(err)) throw err;
-      await sleep(err.status === 429 ? 1500 * attempt : 400 * attempt);
+      if (err.status === 429 || err.kind === 'timeout' || attempt >= 2 || !isTransient(err)) throw err;
+      await sleep(400);
     }
   }
 }
 
-async function transcribeOnce(audio, vocab, langs) {
+async function transcribeOnce(audio, vocab, langs, timeoutMs) {
   const config = { languageCodes: langs };
   if (vocab) config.customVocabulary = LIVE_VOCAB;
   const body = {
@@ -1625,8 +1745,9 @@ async function transcribeOnce(audio, vocab, langs) {
   };
   const ctl = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, 25000);
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs || 25000);
   let res, raw;
+  phr.sent.push(Date.now());
   try {
     res = await fetch(API + '/models/' + TRANSCRIBE_MODEL + ':generateContent', {
       method: 'POST',
@@ -1641,7 +1762,7 @@ async function transcribeOnce(audio, vocab, langs) {
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw new GemError('http', errorText(raw), res.status);
+  if (!res.ok) throw httpError(raw, res.status);
   let json;
   try { json = JSON.parse(raw); } catch (e) { throw new GemError('stream', 'réponse illisible'); }
   const c = json.candidates && json.candidates[0];
@@ -2375,7 +2496,8 @@ function journalText(j) {
       : 'transcription ' + seconds(j.asr) + (j.words ? ' (' + plural(j.words, 'mot') + ')' : ' (vide' + (j.shape ? '\u00a0: ' + j.shape : '') + ')'));
   }
   if (j.via === 'flash' || j.rescue) {
-    const label = j.rescue ? 'réécoutée par Flash' : 'Flash';
+    const label = j.rescue === 'vide' ? 'réécoutée par Flash' : j.rescue === 'limite' ? 'limite de Transcribe, reprise par Flash'
+      : j.rescue ? 'reprise par Flash' : j.quota ? 'Flash (limite de Transcribe)' : 'Flash';
     parts.push(j.flash === null ? (j.error ? '' : label + '…')
       : label + ' ' + seconds(j.flash) + (j.flashWords ? ' (' + plural(j.flashWords, 'mot') + ')' : ' (rien entendu)'));
   }
@@ -2397,6 +2519,7 @@ function renderTech() {
   ];
   if (tech.probe && !tech.probe.ok) rows.push(['Dernier test', errorMessage(tech.probe.err)]);
   if (live.note) rows.push(['Écoute (note)', live.note]);
+  if (S.listen === 'phrases' || phr.sent.length || phr.quota) rows.push(['Transcribe', transcribeStatus()]);
   if (phr.note) rows.push(['Transcription (note)', phr.note]);
   if (tech.note) rows.push(['Note', tech.note]);
   // Dernières répliques, de la plus récente à la plus ancienne.
