@@ -2,6 +2,8 @@
 
 Interprète en direct, vietnamien du Centre vers le français, avec Gemini. S'ouvre dans Safari sur iPhone, sans installation : https://lnagy-pro.github.io/Thong-dich-/
 
+> Deuxième app dans ce dépôt : **Anh → Việt**, de l'anglais vers le vietnamien avec Qwen (Alibaba Cloud Model Studio), sans la reconnaissance des voix : https://lnagy-pro.github.io/Thong-dich-/anh-viet/ · voir [`anh-viet/README.md`](anh-viet/README.md).
+
 ## Fichiers publiés
 
 | Fichier | Rôle |

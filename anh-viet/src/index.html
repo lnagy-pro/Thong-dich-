@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anh → Việt</title>
+<meta name="description" content="Interprète en direct : anglais vers vietnamien, avec Qwen.">
+<meta name="theme-color" content="#f3f5fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Anh–Việt">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="__ICON180__">
+<link rel="icon" type="image/png" href="__ICON64__">
+<style>__CSS__</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Anh → Việt</h1>
+      <p class="status"><span class="dot" id="dot"></span><span id="statusText">En pause</span></p>
+    </div>
+    <button type="button" class="icon-btn" id="clearBtn" aria-label="Effacer la conversation" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v5.5M14 11v5.5"/></svg>
+      <span class="confirm">Effacer ?</span>
+    </button>
+    <button type="button" class="icon-btn" id="settingsBtn" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9.5M18.5 7H20M4 17h3.5M12.5 17H20"/><circle cx="16" cy="7" r="2.4"/><circle cx="10" cy="17" r="2.4"/></svg>
+    </button>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden>
+    <p id="bannerText"></p>
+    <button type="button" id="bannerClose" aria-label="Fermer le message">×</button>
+  </div>
+
+  <main class="feed" id="feed" aria-label="Conversation traduite">
+    <section class="empty" id="empty">
+      <p class="empty-title">Touchez le micro et parlez anglais</p>
+      <p class="empty-text">Chaque phrase s'affiche en vietnamien, en grand, avec l'anglais en dessous. Tournez l'écran vers la personne : elle lit pendant que vous continuez à parler.</p>
+      <article class="line example" aria-label="Exemple de phrase traduite">
+        <span class="example-tag">Exemple</span>
+        <p class="tr" lang="vi">Bạn có thể nói chậm lại một chút được không?</p>
+        <p class="src" lang="en">Could you speak a little more slowly?</p>
+      </article>
+      <ul class="tips">
+        <li>Parlez près du micro, avec des phrases courtes : une petite pause et la phrase part.</li>
+        <li>Si la personne répond en vietnamien, sa réponse est laissée de côté.</li>
+        <li>Gardez cette page au premier plan : l'écran reste allumé pendant l'écoute.</li>
+      </ul>
+    </section>
+    <div class="lines" id="lines"></div>
+  </main>
+
+  <footer class="dock">
+    <button type="button" class="live-pill" id="livePill" hidden>↓ En direct</button>
+    <button type="button" class="mic" id="micBtn" aria-label="Écouter" aria-pressed="false">
+      <span class="ring" aria-hidden="true"></span>
+      <svg class="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5M8.5 21.5h7"/></svg>
+      <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>
+    </button>
+    <p class="hint" id="hint">Toucher pour écouter</p>
+  </footer>
+</div>
+
+<div class="sheet-backdrop" id="sheet" hidden>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <header class="sheet-head">
+      <h2 id="sheetTitle">Réglages</h2>
+      <button type="button" class="text-btn" id="sheetDone">OK</button>
+    </header>
+    <div class="sheet-body">
+      <p class="welcome" id="welcome" hidden>Bienvenue. Pour commencer, collez votre clé API Qwen (Alibaba Cloud Model Studio).</p>
+
+      <section class="group">
+        <h3>Clé API Qwen</h3>
+        <div class="panel">
+          <div class="field">
+            <input id="keyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-…" aria-label="Clé API Qwen">
+            <button type="button" class="small-btn" id="pasteBtn">Coller</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" id="checkBtn">Vérifier et enregistrer</button>
+            <a href="https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key" target="_blank" rel="noopener noreferrer">Créer une clé</a>
+          </div>
+          <p class="key-status" id="keyStatus" aria-live="polite"></p>
+          <p class="note">Gardée seulement dans ce navigateur, envoyée uniquement à Alibaba Cloud. Créez-la dans Model Studio, région Singapour : c'est là que les nouveaux comptes ont un quota gratuit.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Serveur Qwen</h3>
+        <div class="panel">
+          <div class="choices" id="regionChoices" role="radiogroup" aria-label="Serveur Qwen"></div>
+          <input id="customInput" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://….aliyuncs.com" aria-label="Adresse du serveur" hidden>
+          <p class="note" id="customNote" hidden>Adresse d'un espace de travail Model Studio (…maas.aliyuncs.com) ou d'un relais (….workers.dev).</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Traduction</h3>
+        <div class="panel">
+          <div class="choices" id="modelChoices" role="radiogroup" aria-label="Modèle de traduction"></div>
+          <label class="select-row" for="pronounSelect">
+            <span><b>« Je » et « tu » en vietnamien</b><small>Le vietnamien choisit ses pronoms selon l'âge et la relation.</small></span>
+            <select id="pronounSelect"></select>
+          </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Écoute</h3>
+        <div class="panel">
+          <label class="select-row" for="langSelect">
+            <span><b>Langue parlée</b><small id="langSub"></small></span>
+            <select id="langSelect"></select>
+          </label>
+          <label class="select-row" for="vocabInput">
+            <span><b>Noms et mots à bien reconnaître</b><small>Séparés par des virgules : prénoms, lieux, termes de métier.</small></span>
+            <input id="vocabInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Linh, Bến Thành, Grab">
+          </label>
+        </div>
+      </section>
+
+      <section class="group" id="cutGroup">
+        <h3>Découpage des phrases</h3>
+        <div class="panel">
+          <label class="slider" for="pauseRange">
+            <span class="slider-head"><b>Fin de phrase</b><output id="pauseOut" for="pauseRange">1,0 s</output></span>
+            <input type="range" id="pauseRange" min="0.3" max="2" step="0.1" aria-describedby="pauseSub">
+            <small id="pauseSub">Silence après lequel la phrase part. Plus court : plus réactif, mais une phrase peut partir en deux morceaux.</small>
+          </label>
+          <label class="slider" for="maxRange">
+            <span class="slider-head"><b>Réplique longue</b><output id="maxOut" for="maxRange">6 s</output></span>
+            <input type="range" id="maxRange" min="3" max="15" step="1" aria-describedby="maxSub">
+            <small id="maxSub">Passé 6 s de parole, la phrase part à la première petite pause, au plus tard à 12 s.</small>
+          </label>
+          <div class="row-btns">
+            <button type="button" class="small-btn" id="cutReset">Valeurs par défaut</button>
+            <span class="note">S'applique tout de suite, même pendant l'écoute.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Micro</h3>
+        <div class="panel">
+          <select id="micSelect" aria-label="Micro utilisé"></select>
+          <p class="note" id="micNames" hidden>Les noms des micros apparaissent après une première écoute.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Affichage</h3>
+        <div class="panel">
+          <label class="toggle">
+            <span><b>Texte vietnamien plus grand</b><small>Pour le lire de plus loin.</small></span>
+            <input type="checkbox" id="bigToggle"><i aria-hidden="true"></i>
+          </label>
+          <label class="toggle">
+            <span><b>Afficher le texte anglais</b></span>
+            <input type="checkbox" id="enToggle"><i aria-hidden="true"></i>
+          </label>
+        </div>
+      </section>
+
+      <section class="group tech">
+        <h3>Infos techniques</h3>
+        <div class="panel"><dl id="techInfo"></dl></div>
+      </section>
+
+      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Anh → Việt web 1.0</p>
+    </div>
+  </section>
+</div>
+<noscript><p class="note">Activez JavaScript pour utiliser Anh → Việt.</p></noscript>
+<script>__JS__</script>
+</body>
+</html>
