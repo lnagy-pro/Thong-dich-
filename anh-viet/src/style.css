@@ -211,8 +211,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .dock {
   position: relative;
   display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   justify-items: center;
-  gap: 16px;
+  gap: 16px 14px;
   padding-block: 12px max(12px, env(safe-area-inset-bottom, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -249,7 +251,29 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   pointer-events: none;
 }
 .mic.on .ring { opacity: 1; }
-.hint { margin: 0; font-size: .8rem; color: var(--muted); text-align: center; }
+.hint { grid-column: 1 / -1; margin: 0; font-size: .8rem; color: var(--muted); text-align: center; }
+.dock .mic { grid-column: 2; grid-row: 1; }
+/* Pronoms « je » et « tu », de part et d'autre du micro. */
+.pron { grid-row: 1; display: grid; justify-items: center; gap: 4px; }
+.pron-je { grid-column: 1; justify-self: end; }
+.pron-tu { grid-column: 3; justify-self: start; }
+.pron small { font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pron select {
+  -webkit-appearance: none;
+  appearance: none;
+  width: auto;
+  min-width: 76px;
+  padding: 8px 26px 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--hair);
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center / 10px 6px;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  text-align-last: center;
+  box-shadow: var(--shadow);
+}
+.pair { display: grid; grid-template-columns: 2em 1fr; align-items: center; gap: 8px; font-weight: 600; }
 .live-pill {
   position: absolute;
   bottom: calc(100% + 10px);

@@ -6,8 +6,9 @@ Interprète en direct, de l'anglais vers le vietnamien, avec Qwen (Alibaba Cloud
 
 1. Ouvrir la page, coller la clé API Qwen (Réglages › Vérifier et enregistrer), toucher le micro, parler anglais.
 2. Chaque phrase s'affiche en vietnamien, en grand, avec l'anglais en dessous : dès que vous marquez une pause (1 s par défaut, réglable). Tournez l'écran vers la personne en face.
-3. Si la personne répond en vietnamien, sa réponse est reconnue et laissée de côté. Le français est traduit aussi.
-4. Pour l'ajouter à l'écran d'accueil : Partager › Sur l'écran d'accueil. L'app de l'écran d'accueil garde ses propres réglages : la clé s'y colle une fois.
+3. Selon la personne, choisissez « je » et « tu » de part et d'autre du micro : con → chú, em → chị…
+4. Si la personne répond en vietnamien, sa réponse est reconnue et laissée de côté. Le français est traduit aussi.
+5. Pour l'ajouter à l'écran d'accueil : Partager › Sur l'écran d'accueil. L'app de l'écran d'accueil garde ses propres réglages : la clé s'y colle une fois.
 
 ## Clé Qwen
 
@@ -22,7 +23,7 @@ Une clé créée dans la région Pékin marche aussi : Réglages › Serveur Qwe
 - Le micro est découpé en phrases sur l'appareil (AudioWorklet, mêmes réglages que Thông Dịch : « Fin de phrase » et « Réplique longue »). Chaque phrase part en entier, dès qu'elle est coupée, dans sa propre requête : les phrases avancent en même temps, sans s'attendre, et rien n'est perdu entre deux.
 - **Transcription** : Qwen3-ASR-Flash reçoit l'audio (WAV 16 kHz) et l'écrit. Par défaut il reconnaît la langue à chaque phrase (anglais, français, vietnamien…) ; « Toujours l'anglais » la fixe. Les nombres sont écrits en chiffres. Les « Noms et mots à bien reconnaître » lui sont donnés en contexte.
 - **Traduction** : par défaut Qwen3.7 Flash, avec les 6 dernières phrases de la conversation pour garder le fil (pronoms, sujets, noms). « Soigné » : Qwen3.7 Plus. « Spécialisé » : Qwen-MT Flash, modèle de traduction pur (sans le fil). Si un modèle n'existe pas pour le compte ou la région, l'app passe au suivant de sa liste de secours (Qwen3.6 Flash, Qwen3.5 Flash…) et l'indique dans Infos techniques.
-- **Pronoms** : le vietnamien choisit « je » et « tu » selon l'âge et la relation. Par défaut tôi / bạn (neutre, toujours poli) ; Réglages › Traduction propose em / anh, em / chị, chị / em, ou le choix de Qwen selon le contexte.
+- **Pronoms** : le vietnamien dit « je » et « tu » selon l'âge et la relation. De part et d'autre du micro (et dans Réglages › Traduction) : « je » = tôi, con, em ou chị ; « tu » = bạn, anh, chị, em, cô, chú, bác, ông ou bà ; ou au choix de Qwen. Choisir « tu » met le « je » qui va avec (con → cô, chú, bác, ông, bà · em → anh, chị · chị → em · tôi → bạn), qu'on peut changer ensuite. Avec un aîné, la traduction ajoute les « dạ » et « ạ » d'usage. Le changement vaut dès la phrase suivante, et le fil de la conversation repart de zéro (c'est souvent une autre personne). Par défaut : tôi → bạn.
 - Les phrases ne contenant que des hésitations (« um », « euh ») ou rien d'audible disparaissent. Dans une phrase mêlée, les morceaux déjà en vietnamien ne sont pas retraduits.
 - Une erreur passagère (réseau, surcharge, trop de requêtes) est réessayée une fois ; une phrase restée en échec repart d'elle-même à la réponse suivante ou au retour du réseau, ou avec le bouton « Réessayer ».
 

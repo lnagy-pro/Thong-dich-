@@ -27,12 +27,27 @@ const MODELS = [
   { id: 'qwen3.7-plus', api: 'mm', title: 'Soigné', sub: 'Qwen3.7 Plus · tournures plus naturelles, un peu plus lent', fallback: ['qwen3.6-plus', 'qwen3.7-flash', 'qwen3.6-flash'] },
   { id: 'qwen-mt-flash', api: 'text', mt: true, title: 'Spécialisé', sub: 'Qwen-MT Flash · modèle de traduction, phrase par phrase, sans le fil', fallback: ['qwen-mt-plus', 'qwen3.7-flash'] }
 ];
-const PRONOUNS = [
-  { id: 'toi', label: 'tôi / bạn · neutre (recommandé)', rule: 'use “tôi” for I/me and “bạn” for you (“các bạn” for several people).' },
-  { id: 'em-anh', label: 'em / anh · à un homme plus âgé', rule: 'the speaker is younger than the listener, who is a man: use “em” for I/me and “anh” for you.' },
-  { id: 'em-chi', label: 'em / chị · à une femme plus âgée', rule: 'the speaker is younger than the listener, who is a woman: use “em” for I/me and “chị” for you.' },
-  { id: 'chi-em', label: 'chị / em · à plus jeune que moi', rule: 'the speaker is an older woman talking to someone younger: use “chị” for I/me and “em” for you.' },
-  { id: 'auto', label: 'Au choix de Qwen (contexte)', rule: 'choose natural Vietnamese pronouns from the context and keep them consistent; when unsure, use “tôi” and “bạn”.' }
+// Pronoms : le vietnamien dit « je » et « tu » selon l'âge et la relation. On choisit comment on
+// s'appelle (je) et comment on appelle la personne en face (tu) ; choisir « tu » met le « je » qui
+// va avec (con → chú…), qu'on peut changer ensuite.
+const JE = [
+  { id: 'tôi', label: 'tôi · neutre' },
+  { id: 'con', label: 'con · à cô, chú, bác, ông, bà' },
+  { id: 'em', label: 'em · à anh, chị' },
+  { id: 'chị', label: 'chị · à plus jeune' },
+  { id: 'auto', label: 'Qwen choisit' }
+];
+const TU = [
+  { id: 'bạn', pair: 'tôi', label: 'bạn · neutre', who: 'someone of about the same age, or a stranger' },
+  { id: 'anh', pair: 'em', label: 'anh · homme un peu plus âgé', who: 'a man a little older than the speaker' },
+  { id: 'chị', pair: 'em', label: 'chị · femme un peu plus âgée', who: 'a woman a little older than the speaker' },
+  { id: 'em', pair: 'chị', label: 'em · plus jeune', who: 'someone younger than the speaker' },
+  { id: 'cô', pair: 'con', label: 'cô · femme, âge des parents', who: 'a woman of the speaker’s parents’ generation' },
+  { id: 'chú', pair: 'con', label: 'chú · homme, âge des parents', who: 'a man of the speaker’s parents’ generation, younger than her father' },
+  { id: 'bác', pair: 'con', label: 'bác · plus âgé que les parents', who: 'a man or a woman older than the speaker’s parents' },
+  { id: 'ông', pair: 'con', label: 'ông · homme âgé', who: 'an elderly man' },
+  { id: 'bà', pair: 'con', label: 'bà · femme âgée', who: 'an elderly woman' },
+  { id: 'auto', pair: 'auto', label: 'Qwen choisit', who: '' }
 ];
 const LANGS = [
   { id: 'auto', label: 'Anglais ou français (auto)', sub: "Recommandé : la langue est reconnue à chaque phrase, et les réponses en vietnamien de la personne en face sont laissées de côté." },
@@ -60,7 +75,8 @@ const S = {
   region: store.get('region', 'sg'),
   customBase: store.get('customBase', ''),
   model: store.get('model', MODELS[0].id),
-  pronouns: store.get('pronouns', 'toi'),
+  je: store.get('je', 'tôi'),
+  tu: store.get('tu', 'bạn'),
   lang: store.get('lang', 'auto'),
   vocab: store.get('vocab', ''),
   pause: store.get('pause', CUT_DEFAULTS.pause),
@@ -72,7 +88,8 @@ const S = {
 };
 if (!REGIONS.some((r) => r.id === S.region)) S.region = 'sg';
 if (!MODELS.some((m) => m.id === S.model)) S.model = MODELS[0].id;
-if (!PRONOUNS.some((p) => p.id === S.pronouns)) S.pronouns = 'toi';
+if (!JE.some((p) => p.id === S.je)) S.je = 'tôi';
+if (!TU.some((p) => p.id === S.tu)) S.tu = 'bạn';
 if (!LANGS.some((l) => l.id === S.lang)) S.lang = 'auto';
 const clampNum = (v, lo, hi, def) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
 S.pause = Math.round(clampNum(S.pause, 0.3, 2, CUT_DEFAULTS.pause) * 10) / 10;
@@ -245,7 +262,23 @@ function modelName(id) {
   return s.replace(/^qwen([\d.]+)-(\w+)$/, (x, v, n) => 'Qwen' + v + ' ' + cap(n));
 }
 
-function pronounRule() { return (PRONOUNS.find((p) => p.id === S.pronouns) || PRONOUNS[0]).rule; }
+/** Consigne des pronoms, d'après les choix « je » et « tu ». */
+function pronounRule() {
+  if (S.je === 'auto' && S.tu === 'auto') {
+    return 'choose natural Vietnamese pronouns from the context and keep them consistent; when unsure, use “tôi” and “bạn”.';
+  }
+  const tu = TU.find((p) => p.id === S.tu) || TU[0];
+  const me = S.je === 'auto' ? 'choose from the context how the speaker calls herself'
+    : 'the speaker calls herself “' + S.je + '” (for I, me and my)';
+  const you = tu.id === 'auto' ? 'choose from the context how to address the listener'
+    : 'address the listener as “' + tu.id + '”, ' + tu.who + ' (for you and your; for several listeners, the usual plural)';
+  const polite = ['con', 'em'].includes(S.je) || ['anh', 'chị', 'cô', 'chú', 'bác', 'ông', 'bà'].includes(tu.id);
+  return me + '; ' + you + '.' +
+    (polite ? ' Be polite, as with an elder: use “dạ” and “ạ” where Vietnamese speakers naturally would, without changing the meaning.' : '') +
+    ' Keep these pronouns in every sentence.';
+}
+/** Jeu de pronoms en vigueur : le fil de la conversation ne mélange pas deux jeux. */
+function pronounKey() { return S.je + '/' + S.tu; }
 
 function systemPrompt() {
   const vocab = vocabList();
@@ -592,7 +625,7 @@ async function transcribeLine(line) {
   if (next) translateLine(line);
 }
 
-/** Le fil de la conversation : les phrases déjà traduites des 3 dernières minutes. */
+/** Le fil de la conversation : les phrases déjà traduites des 3 dernières minutes, avec les mêmes pronoms. */
 function recentContext(line) {
   const index = lines.indexOf(line);
   const cutoff = line.createdAt - 180000;
@@ -600,7 +633,7 @@ function recentContext(line) {
   for (let k = index - 1; k >= 0 && out.length < 6; k--) {
     const prev = lines[k];
     if (prev.createdAt < cutoff) break;
-    if (prev.dead || prev.status !== 'done' || !prev.en) continue;
+    if (prev.dead || prev.status !== 'done' || !prev.en || prev.pron !== line.pron) continue;
     out.unshift({ en: prev.en, vi: prev.vi });
   }
   return out;
@@ -610,7 +643,7 @@ async function translateLine(line) {
   if (line.dead || line.busy || !line.en) return;
   if (!S.apiKey) { failLine(line, 'Ajoutez votre clé API Qwen dans les réglages.', false); return; }
   line.busy = true;
-  Object.assign(line, { status: 'tr', error: '', autoRetry: false });
+  Object.assign(line, { status: 'tr', error: '', autoRetry: false, pron: pronounKey() });
   render(line);
   inFlight++;
   updateStatus();
@@ -1070,7 +1103,6 @@ function openSettings(welcome) {
   renderChoices('regionChoices', 'region', REGIONS, S.region, onRegion);
   renderCustom();
   renderChoices('modelChoices', 'model', MODELS, S.model, (id) => { save('model', id); trState.dead.clear(); trState.note = ''; });
-  renderSelect('pronounSelect', PRONOUNS, S.pronouns);
   renderSelect('langSelect', LANGS, S.lang);
   showLangSub();
   $('vocabInput').value = S.vocab;
@@ -1226,7 +1258,37 @@ customInput.addEventListener('change', () => {
     : "Adresse refusée : seuls les domaines …aliyuncs.com (Model Studio) et ….workers.dev (relais) sont autorisés.";
 });
 
-$('pronounSelect').addEventListener('change', (e) => save('pronouns', e.target.value));
+// Pronoms : de part et d'autre du micro, et dans Réglages › Traduction. Choisir « tu » met le
+// « je » qui va avec ; changer « je » ne touche pas à « tu ». Ils valent dès la phrase suivante.
+const jeSelects = [$('jeChip'), $('jeSelect')];
+const tuSelects = [$('tuChip'), $('tuSelect')];
+function fillSelect(select, items, current, short) {
+  select.textContent = '';
+  for (const item of items) {
+    const o = document.createElement('option');
+    o.value = item.id;
+    o.textContent = short ? item.id : item.label;
+    select.appendChild(o);
+  }
+  select.value = current;
+}
+function renderPronouns() {
+  jeSelects.forEach((el, i) => fillSelect(el, JE, S.je, i === 0));
+  tuSelects.forEach((el, i) => fillSelect(el, TU, S.tu, i === 0));
+}
+function setPronouns(je, tu) {
+  save('je', je);
+  save('tu', tu);
+  jeSelects.forEach((el) => { el.value = je; });
+  tuSelects.forEach((el) => { el.value = tu; });
+  if (!sheet.hidden) renderTech();
+}
+jeSelects.forEach((el) => el.addEventListener('change', () => setPronouns(el.value, S.tu)));
+tuSelects.forEach((el) => el.addEventListener('change', () => {
+  const tu = TU.find((p) => p.id === el.value) || TU[0];
+  setPronouns(tu.pair, tu.id);
+}));
+renderPronouns();
 $('langSelect').addEventListener('change', (e) => { save('lang', e.target.value); showLangSub(); });
 function showLangSub() { $('langSub').textContent = (LANGS.find((l) => l.id === S.lang) || LANGS[0]).sub; }
 $('vocabInput').addEventListener('change', (e) => save('vocab', e.target.value.trim()));
@@ -1322,6 +1384,7 @@ function renderTech() {
   const rows = [
     ['Écoute', 'phrase par phrase · Qwen3-ASR-Flash écrit ' + (S.lang === 'en' ? "l'anglais" : 'la langue reconnue') + ', ' + modelName(activeModel().id) + ' traduit'],
     ['Serveur', base ? base.replace(/^https:\/\//, '') : 'adresse invalide'],
+    ['Pronoms', 'je\u00a0: ' + (S.je === 'auto' ? 'au choix de Qwen' : S.je) + ' · tu\u00a0: ' + (S.tu === 'auto' ? 'au choix de Qwen' : S.tu)],
     ['Audio', tech.mode ? tech.mode + ' · ' + tech.rate + '\u00a0Hz → 16\u00a0kHz' : 'pas encore démarré'],
     ['Gain du micro', typeof tech.gain === 'number' ? (tech.gain >= 0 ? '+' : '−') + Math.abs(Math.round(tech.gain)) + ' dB, automatique' : 'automatique (×16 au plus par phrase)'],
     ['Dernière phrase', tech.asr ? 'transcription ' + seconds(tech.asr) + (tech.tr ? ' · traduction ' + seconds(tech.tr) : '') : '—'],
