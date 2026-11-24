@@ -1,0 +1,2689 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-pLxGlSHSlQwMMjU9OUiJHFWN7cWRMXPe4nDKgc/JtZw=' blob:; style-src 'sha256-Z6kYbNGCnK4ZmxvFS6r4qPymQqj4+/VbgAEBZEyUe2M='; img-src data:; connect-src https://*.aliyuncs.com https://*.workers.dev; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anh → Việt</title>
+<meta name="description" content="Interprète en direct : anglais vers vietnamien, avec Qwen.">
+<meta name="theme-color" content="#f3f5fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Anh–Việt">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAWQUlEQVR42u1de3BcZ3U/5/vuvbt7V29pLcmOHdt6ObJDng6JQ144JJRnM4UUCgWSdAhMh3baDlBaaKHTNjDDFPownSmQGTyhgUwDIWnixLGTOIQmgVh+P6LYsmVZ1sOS9dxd7b33O6d/XMmWtQ/tyrK9j+/MN5mJrP3u1b1nz++c33l8uOGh46BFSyoR+hFoSScGMOunoCW1cmjV0KJhRcsCYAW07dCS1ufQD0GLhhUtGla06GhFi4YVLZoE06IthxatHFq0cmgp9mhF+xxatOXQopVDi2ZItejEmxYNK1ryNLeiTYcWbTm0aJ9Di45WtGhY0aKVQ4vOrWjRlkNLsTik+a28AhBw0bdlYKLzfoIIAue5kCLO8eYz7cjMxFo5FiqIEIuT6y3+IzQMtIPiLKIigutxfEplVtMyW2YPwogQjSlPpf2AZWIwIPIZ1fO3hhQRHJfXr7WvqLeYGXFx7Ie/Vd+Q+9aBqGkgMyCC63JjxLyxPez/b9JHABHGJ9WOnRP+R7K5edfjW68L19eYyTfPxCjwWG9i3ztxy0ImbTlyBRTEeFz94b0199xcseib/2b35K87JgOmUMwCMZ6g9lWhb31haeZPPfyP3a/tmqwIy3nxBRESCX7oo3Xr14bT/c6T20ff2BsNBgyVr1RT/vatMAAgxKZIEStiKRbHcvhbReMECAzTCxAcjxUxEYhUPjoRGBK/8tmGnYe6PGKEed6nv2c0nvrmlWIpMZZQZ+9BM6QL0RCB4D/ZxVIOfyshAGbpBgAjshSIkFo5pABF3LQ88OBHa7//3wO1lUYGZ+LczYs0N88gBQqccw86lC3coB+RGB78aN1Vq4LROAksBZ6DId/XxcOtXC6ECMAcDIgvf6bR8xhmw9LCbj7vn3y+w0rm22POOdgiAgT/U+fBSjbPQQhUxO+5ruwjd1Y99dKZqgpDZQIXzkVDNaxchHBXiNyWaaAQELCQF3hFZIa/+FR9pNp0XEbUXfaXz2hw+n9FgJMDztCoZ8gc3jQRS4FHehJSAHHO8CUQFHF9rfmnn1jyjR/0pvNMs9wzr+1GXjdSM5y7N079jn/4i8HN/ztUXW7kTGwjhiwkn0L3L8Q5kOJE/PH31Tz76mjHoWjYlpR89embn8/pYF4INGpYyUq1BVrmQpYhF+AfzCDLTDz81QeWGgYWcVq7sJWD4dx3L7eVM+mewjNd1xz61AfqRieUIVGXCV4emjTrcPAihkXJjqdPe3zx40u2vznaP+xapkgyIUUQrRQ6ycGLwRnQPGaj+1QiWV2YuTws/+ozjVNTJDC3PQuC6hAFrRuX4EJEgAhbXx/rGXD4fHyRAon4nluq7tlQNTrhCYELUOx8XoXtcwgBhgSZ48IcU/wAMDrpPbltGAHmBiaIDPDlzzZWlElPEWqfI38Y0miMhkZdYlAqh7+izBaGmEONzHOh+lrzP5/o/8LH6gOWmF3z4dMeKxoDX/hY/SOPnqytNGdoDywCnyOPm5oyPjf/9dy7oaq+1gwFBOUSTz657czQiHuubCeLFxSpMrt6Ek/vGLn/nlo/4X4+7QF//KHIc6+NHD4Wt4OCKPfcii72WdwcKQDctb7irvU5lwK9+tZ435BjGdnxqggAYAdF2Babnxn88B3VwfONBwIwsGXiXz+w7HPfOFJMPWKioHOyROApVjkujxizvpCvA6GgKAuJzuPxX24fRoQ5hsqnPdavK/uDu2tGJz0pp3OC89mzfE/LFna0IgQYEmWOC3O7FvqWAxBCQfHoU4MTUSVwbiWp/5MvfbJxSY2ZcMlXIC9jaTQXQLRSgsUcOV0LAQCClpACA6Y41pt47NnTycYDEYg4UmM+/LGGySgJAUSQcHkeMizPeQ7Q2pHFtQIWGhI8ReVhsfmZwYFh12dIkxJy8In3165rDsXiSuA8vQ75rx2FzXMszOfISeN8n8M00RBIBJaBp0fcTT/r8xnSuZwpsGWKL97f4Jd6xKZIJ94uLwmWs8+RRHJkEdTJ6ZpkRVxZJp/cNrz7cNRnSOH80mViuOeW6vVryyZiFE+QJsEuAwlGDAJhx1tjezujufaNDY06ppzzvZ8HVgT6JWDsF4MR0Xce7XnskTZEmNMHxcxS4EP31W99fWQypgqa6DDyt9YnY26dmQHxuddGfvSL/lm8ZFZSbgtDnPMYskzin033E3GZLd/cP/H4ltOf/tCSOZyYFMgMt99QeW1beGDYOYdMqWt9OI9rfQqWBPMlHJJ1VeZ8hb5JVkdd6OtQxOW28e+P9218d1VDneWbsfOq1CT+0QeWvLpzLINuaBLsYpNg5ClSOS7OdK2s4k5mNk0YHnW+u/lksmcqBALAB2+rjtSYzJmb93W0UoyiFFeWG8+8PLzjrTEpcHYRq++I1FWbd91YGZtShWs6CjXxtpguXZY7JF+LwDTwO4/23LSuPGDheQkXBAa4/cZKM3MFYX4n3rTluACWhdkOysNdsR/+T58QOJczBQgFhGGgnmB8kQwHz1vaKSQIkbPDP3uyz8yF5v8IJ7UbeIoryuWPftn3/ttqWq8MEbHIuon2AuqddbSShcSmaGTcQ8it2AcATANDwUWYqsMAUmA0rr794xM//oc20BOM86EKzEf3G9rLovFIOJSqrSg9XSEEnDrt7D40aZrIfAE+x4xnWhE2Xvnt6FPbh+7bWDeH9ij0Yp+CbE3w48P7743cf29kAftue2Pk87vGqi1DcZaN1JkCXSK2Q+JfNvfccWNldYWZcnaUbqS+9C4h+KNzsl+OS4o4nqBF7IFmhqAlegcS33+sNzmbDzrxdpmKBUEKXMBa9NErnuKqcvOJ5wd/t38iOSGnJxhfjNwKX8z9zwr4/8nu99NGRozAzI/8qPvn310rBWQBLsw0s6m2HEVOexCX2bLj4MRPnu5Ppj30BOOLYj+ImGjRxqT4W3GqmQn+hVIOISXKOiFXZvzg8d57N1RfUR/0FKfEr3T3oKOV3Kgqy0IhUCyej+BvFbBwVvoNGNgQmS5khwRk0RvNDKaBYxPut3/cvelv29J13/tXsczz7kHzHLnZDIlw4tTU4WMxUiwWacyBv1V3b1ziNN/pX2hs0jt8LObPFk41vtgjIswi5lUeV4Tli78Z+dmWgWvXlKfkTP176B1MGAI5f3UD8F33vZnnQH4xHH+BIJKUIPN4oFyHcCQcysyGCUQh9EywC1FegcalYV9xntef64Oat3gxn6eBFcwZb1yYFyoCpkOHslr00aFa9NGhWjSsaNHRyuIGPoXmIOsJxnDJumoXgYOf6W+TpXCgRqGXCWYfVdpBEQgI12UUC//uM4OUQAwTk0oIrRxFgCYIQIAIm76+ZtWykOvxwt6rbzNicfqTvzs4Ou4ZEol1tFLgwgyGgWfG3G9tOvqTR66urbqg78M3Nx0+1DVZWW4QFT8cyyVtDxX9H8kMoYA4ciJ+sCv6oTsjM14W5lToJQV+c9PRzb/qi1SZuRa7F6pyREpAOXy3o9yWB49GT512fu+2OmIQAhEhm6WITQM3Pd7zb491L6mxPFUq8Ypc0vYglEyDWtiWO/ePMcOt11UrlVUDklJsSHzyxYFvbjpSWWYysSbBoFi7n6srze9t7v75ln4pcV4boIilxDf2jn3te512UEKJxP3nLEfrg1BiYgfksztOv6utvGm57aW3H/5hwUdOxD79lX3MYEjBBJo+L3LnFIDtkPjzfzq069C4ITGld+kfE9Y/lHjo6/unEsoyZs78Ki3L0fZAyekHgCExnlA73jrzvg211RUmEeMs9pQZEDEa9x7++wMHj0bLszi8vlijlQehFKcngGWJ4RH3jT1jv7+x3jIFz/Tf+vXuKPDP/vnQ9jfP1FSZpROeJClH64Ol+ZczQSgoe/rie9+euO/uel81/GZGKfEb/9r5xJb+SLWVeUR10SvHA1DCbUh2UB46Fu0fStx7ax0xE4Eh8QePn/iPn3aXss3QyjGNL2Uh+fqeUUPihmurhcCnXxr82vferiw3uOSroEpdOabJ07DxwmtDq5eHphz63N/srQgbgKCVA9s/uANKXhBBEVgmWqYYn/QsUxDp6slSqgSbd9yP43LC8QwDldaM0in2yVY/EECgRhNdfZ6mOFQ/DN23ogV0bkWLhhUtOlrJugmFL+3mWKRNLkZhRhbznsN1QS0qxDgfL8LnDbZLrx6Y6R+1Q3oxEu5C+SqS+puJwISKUCAvoM+NeHr/9IOj2FPi7M4CGYEy6TGj9jkuDZXJjmssWzLyw8//1BAEyW+fARAU48P/9akjA5Gg6Wb/bqSg0aj9pfe/8smNr1EsJAQl1YYJacd/9dpN33n6fVV2HADG46F/vP/pO6/fR/G5v08kRHDq2098+JmOqyvtuCKhYeWiA0rA9I4P1sYT1tq2ozAVAJGk3EpAWfTO9s79PUtty1FZKwcxBi33IzfsW1E/BPFUOxNC0Nl3YinO+khD1fiKpYMQtWGOMpEAO14WSlDBWg5RgFOLOeZYT/3uGibhOhY55pzluSZNBd67ttMyvOzNhkCecsyWhsHmxn6aDJNnzNlWJSwG6D3R+Hrn6nDAOWsJHM8gx3STbsP/iSLUE4zhUrZEh0zn5QMtX54M+69/zuNHqdA1r13VszIydGKoJpAlsiDFHWNDa5dZFlOTYZmMKYwYcHYcbh6asGvKoooEMzMTAAtkRp5zWu30T/jcqGRtOS5Bhh2DpvtOf6SjawUEHErCcgRQSgbLJ29t64o72Z4wzIymoe5s74Q0zoFABs/YuvcqKUolLycKM8POjmds2d0OgjJENXeve9uQWb1IRE54xvLaketX9YBjJruixIime6o/srNreTjgMAnNkObxSAUr8crB5vhYeSjgctLxGAIJHGt9U/fy2pHBsXLTmOckWYEUd4ybmo6HKydULJSMKcwIlvvyweahibCPKVlPi8z7I3cyWQ6GgltMGDS9roHa3x5ZCVYqZEEgzyirHr+5+VgsYQqgbLa9a20npMGgGUxZYwh13qey6WXhQl2Fax5ZKbFlV3u618kAAHz31Z2YBVnuKLmkcuKW5m5wzWQfxceU3v7Izq4VtuUqEqWTWylI70oxBgPOq4eaJkcqy+w4q7nnPgtkcMybW441VI+NxYKGTHvEhRAcjwVvbe2KRM5QwkpWjlmYYteWRb0Z5Zg52HGe87/y/AjIIkzZM0PQdLuHql/vXAkBhzgZWZhco6Z2dH1Td8wxBWYAAPZI3Ln2HUjDi0xjyp41hiytVgVRuIgIDET43O72dAkUBgRBG9d1MmGG4+uVEpWh+G1rusA1MDWmeL19kZ1dy6cxhXPxMln7HJeHDUM7kPjN4dVjw1XSTPGlF8jgmre1ddWVT7pKYqo3KYDijtm+rH914yA7ZhpMcV462Dw8YU97o6VUCVaois0AAcM7OVzx68OrwXKSUxg+sjTUD1+/qieeMISg5E0EcsKTt7cfxWAiGZtmNMx4cU+bIVVa41Ok1qMIHG/csuuqdPUbzAiGt3HdOx7JdI5tyHLvaD8CqUyLjykn+2dhCpRUJVgh20lFGAok/q9z5fDpmtqqcfbmOg2IDK55R/vRKjvm+hENz0m2Gavrh9at6APHRJEmTjnQPDRh15bHPCWS45BMtgNnxSqsYeUSIwuDJb2+M+WvHGyCgEup3A52zCsbT79rxam4z4bN+jhOJ9uOWeVRpVIcxePHKS/saTOkIuYFwQprWLmsCi54y66rQImULqdiBMu56+p3HCXn2BUGkILeu+4IpIpgiREt72RfXUfXFbblEgndmlBwMYuwA86bR1b0D9QJK03M4hl3tR8tD06pWV8Gv6jsitqxG1f3QCoihBnBdF860Dw8GTalAijFvhUubGQBNqU3OBZ+aX8TWGmRpWXZQGvj6SlHCqQZm0lxx7hu5cmK6nFyZbJDK5DBlS/sbjWER5wZIIoVVhiKYEnk53etAU8ippz+JqQ9dUvL8YRjIJyjvInwPWuOgaTkCnFiRMvt6YvMYAoCl1okC6IIdEORsAPO77qW95yKiFTGwy//vL29S0oiQP9THony0NTNLd0pVYoYwfReOtA8PGlLqbgE7UYRwMpZZBmaCG3b3wLpqdLrVp1aWj3mugKRBdKUK5sbh5oahyAVMSqRwTW27mmdyacsTDc0CZYftYOmVM/vakv5phGZPFlZNX71ir64awgkRE64xo2rTwp7KpnamsGUup1dy6YxBUqzkboofA4iDFtuR9eyrt4lmApZiBEMtaG121MSp7NKfHNLd8oglhnB9Lbvbz5zNp9SkrhSDLDiLynUaCy4dU8LpAtolby59UQ4kFCMrhK15dHrV/WCm6IC2c+nbN2dDaYUd7QCRTOaBy3De2FPK09ZyRXCiAyO0bp08Mq6EdcTjidbGoeWRkY5yRv1MeXEqUjHsaW25SwGphRqhkJwsZgOP4W2p7ux80QDWt4cZPH7FQJlsWtW9iU8w1Xy+tW9KTsbpjHlQNPQpO0Xry/YaBR+tFI02sEgkcZjged3t4CZJqAV/O6WbiKQSOubeiBd3ZdrbN3dOj1SsIS1o3h8Dj8PFzDcrXtaKBaUKZHFk+ubekOWW2nHr7myL7n0awZT6jq6ltqBBBGWsnaI4ho3i3bA29/TcOB4IyYlaX22Y3XjUEPVxBW1Y42RUfakSFIOsLzt+5uHJ0OmKLkzNIp8JphAik6ZW3a3gqGSYxalhFEWW7NscM2yQQxNJTscEhkc44XdLaakUleN4juRmgmCpvvinpa//MivjeTGNQBAvqm5J2R5kCqfIiy3+1Sko2upbSVI4TyocbaGJ00Z2tzmBD0TDC53P0vIcg+djOzpWnpD+zEVD8hZ9V0SGRLWxquPCsGQMJMxRVjetn1NwxOhuvKYN18BR65Oh4aVvBjgEXeM53a1gaQ55gGRwTVal51ubhxK9kZ9TNm6u8U0iKBEKfMiHzWpGEIBZ/ve1V+dsC1DJQ/wSFf3JSz3eG+ko6vRDiSIYJGMAoNupM6rNuuQ6XWeqnvryBUQyDZtNh2n7Gs648cpOV1UNzUVlso7nnyuow0EZTlQ8Lw4ZXHTsKxhJe/cUuflfaviY2WhgMsKM48lncaUk5FdXQ12wKFsR+TnSoLp3EoeLGIIWN6Rgeo3316ess06JaZs27d6eDJkCLVYkFIElWDFKQjsKflsR6tfK0qEKv0CBk6Y05iS42RI4kw7FzSLZBTrUWZEaFuJl/etcidDZmUUPJHW92CEgHPyWOPOo43hgMOUtZvAwAS25cpwQpKYM6BMEkI4YRrEBAVKguGqO35VvMYDPMKbWnory/zpLpyuEAQN1T9csed4g5WKdM9wMpzriWtW9tfXjifXhTAjSnWgu6F3uMLMZVutHJfuZL/olDl/AzSDaahQwMv1640I8YThKpnuF4KWaxlUoNbZKPqT28qCiWxOUGDGBcyhZgY74CI6GdCtgAfjc7EfeKdyeDe8MEL2Ih//onMrWrRyaNEMqRZ9dKgWDStaSvZ0SG06tGjLoUX7HFp0tKJFw4oWrRxadG5Fi7YcWrRyaNHKoUU3UmvRoi2HlhLtsteiGVItGla06MSbFg0rWjSsaNHRihZNgmnRsKJFS5L8P6Jl0MqmuHVeAAAAAElFTkSuQmCC">
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
+<style>/* Une seule colonne plein écran : en-tête, fil de la conversation, gros bouton micro en bas.
+   Lisible d'un coup d'œil par la personne en face : vietnamien en grand, anglais en retrait. */
+:root {
+  --bg: #f3f5fa;
+  --surface: #ffffff;
+  --sunken: #e6eaf3;
+  --fg: #0f1524;
+  --muted: #5a6375;
+  --hair: #d5dbe7;
+  --accent: #2f55d4;
+  --on-accent: #ffffff;
+  --live: #d6312a;
+  --warn: #c2530a;
+  --bad: #d6312a;
+  --banner-bg: #fbe9e7;
+  --banner-fg: #7a1a14;
+  --shadow: 0 1px 1px rgba(15, 21, 36, .04), 0 2px 10px rgba(15, 21, 36, .05);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f19;
+    --surface: #141a28;
+    --sunken: #1c2333;
+    --fg: #e9edf6;
+    --muted: #9aa4b8;
+    --hair: #273047;
+    --accent: #8aa9ff;
+    --on-accent: #0a1330;
+    --live: #ef4a40;
+    --warn: #ff8b3e;
+    --bad: #ff5d52;
+    --banner-bg: #3b1714;
+    --banner-fg: #ffd9d5;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html { height: 100%; font-family: var(--font); font-size: 17px; -webkit-text-size-adjust: 100%; }
+/* Taille du texte réglée par l'iPhone (Réglages › Luminosité et affichage › Taille du texte). */
+@supports (font: -apple-system-body) {
+  html { font: -apple-system-body; font-family: var(--font); }
+}
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.app { height: 100%; display: flex; flex-direction: column; }
+@supports (height: 100dvh) { .app { height: 100dvh; } }
+
+/* En-tête */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: calc(env(safe-area-inset-top, 0px) + 8px) 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--hair);
+  background: var(--bg);
+}
+.brand { flex: 1; min-width: 0; }
+.brand h1 { margin: 0; font-size: 1.06rem; font-weight: 700; letter-spacing: -.01em; }
+.status {
+  margin: 1px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .78rem;
+  color: var(--muted);
+  min-width: 0;
+}
+.status span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--hair); }
+.dot.on { background: var(--live); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+.icon-btn {
+  min-width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 0 10px;
+}
+.icon-btn svg { width: 22px; height: 22px; flex: none; }
+.icon-btn:disabled { opacity: .3; cursor: default; }
+.icon-btn .confirm { display: none; font-size: .88rem; font-weight: 700; }
+.icon-btn.armed { background: var(--live); color: #fff; }
+.icon-btn.armed .confirm { display: inline; }
+
+/* Bandeau d'erreur */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+  padding: 10px 6px 10px 12px;
+  border-radius: 12px;
+  background: var(--banner-bg);
+  color: var(--banner-fg);
+  font-size: .88rem;
+  line-height: 1.38;
+}
+.banner p { margin: 0; flex: 1; min-width: 0; }
+.banner button { flex: none; border: 0; background: transparent; font-size: 1.25rem; line-height: 1; padding: 0 8px; }
+
+/* Conversation */
+.feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-block: 12px 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.lines, .empty { max-width: 720px; margin-inline: auto; }
+.lines { display: flex; flex-direction: column; gap: 10px; }
+
+.line {
+  position: relative;
+  min-width: 0;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 12px 16px 13px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
+}
+/* Vietnamien : ce que lit la personne en face. */
+.tr {
+  margin: 0;
+  font-size: 1.32rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -.005em;
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.big .tr { font-size: 1.78rem; line-height: 1.24; }
+.tr.wait, .big .tr.wait { font-size: .92rem; font-weight: 500; color: var(--muted); }
+.tr.wait::after { content: " …"; animation: pulse 1.1s ease-in-out infinite; }
+/* Anglais : la transcription de ce qui a été dit. */
+.src {
+  margin: 6px 0 0;
+  font-size: .94rem;
+  line-height: 1.38;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.tr.wait + .src { margin-top: 4px; }
+.err { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.err p { margin: 0; flex: 1 1 14em; min-width: 0; color: var(--warn); font-size: .9rem; line-height: 1.35; }
+.err + .src, .is-failed .src { margin-top: 8px; }
+.retry {
+  border: 1px solid var(--hair);
+  background: var(--sunken);
+  border-radius: 999px;
+  padding: 7px 15px;
+  font-size: .86rem;
+  font-weight: 600;
+}
+.note-line { margin: 2px 0; text-align: center; font-size: .78rem; color: var(--muted); }
+
+/* Écran vide */
+.empty { display: grid; gap: 14px; padding-top: 3vh; }
+.empty-title { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.empty-text { margin: 0; color: var(--muted); font-size: .95rem; line-height: 1.45; }
+.example { content-visibility: visible; }
+.example-tag {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.example .tr { padding-right: 72px; }
+.tips { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+
+/* Bouton micro */
+.dock {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: 16px 14px;
+  padding-block: 12px max(12px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-top: 1px solid var(--hair);
+  background: var(--bg);
+}
+.mic {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 32%, transparent);
+  transition: background .15s;
+}
+.mic svg { position: relative; width: 32px; height: 32px; }
+.mic .i-stop { display: none; }
+.mic.on { background: var(--live); color: #fff; box-shadow: 0 6px 20px color-mix(in srgb, var(--live) 38%, transparent); }
+.mic.on .i-mic { display: none; }
+.mic.on .i-stop { display: block; }
+.ring {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 5px solid color-mix(in srgb, var(--live) 36%, transparent);
+  opacity: 0;
+  transform: scale(calc(1 + var(--lvl, 0) * .25));
+  transition: transform 80ms linear, opacity .2s;
+  pointer-events: none;
+}
+.mic.on .ring { opacity: 1; }
+.hint { grid-column: 1 / -1; margin: 0; font-size: .8rem; color: var(--muted); text-align: center; }
+.dock .mic { grid-column: 2; grid-row: 1; }
+/* Pronoms « je » et « tu », de part et d'autre du micro. */
+.pron { grid-row: 1; display: grid; justify-items: center; gap: 4px; }
+.pron-je { grid-column: 1; justify-self: end; }
+.pron-tu { grid-column: 3; justify-self: start; }
+.pron small { font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pron select {
+  -webkit-appearance: none;
+  appearance: none;
+  width: auto;
+  min-width: 76px;
+  padding: 8px 26px 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--hair);
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center / 10px 6px;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  text-align-last: center;
+  box-shadow: var(--shadow);
+}
+.pair { display: grid; grid-template-columns: 2em 1fr; align-items: center; gap: 8px; font-weight: 600; }
+.live-pill {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 16px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: .86rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+}
+
+/* Réglages */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(5, 8, 16, .45);
+}
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100% - env(safe-area-inset-top, 0px) - 16px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, .25);
+  animation: rise .22s ease-out;
+}
+@supports (height: 100dvh) { .sheet { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 16px); } }
+@keyframes rise { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 12px 10px;
+  padding-left: max(18px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--hair);
+}
+.sheet-head h2 { margin: 0; font-size: 1.05rem; }
+.text-btn { border: 0; background: transparent; color: var(--accent); font-weight: 700; padding: 10px 10px; border-radius: 10px; }
+.sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  gap: 20px;
+  padding-block: 16px max(24px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(18px, env(safe-area-inset-left, 0px));
+  padding-right: max(18px, env(safe-area-inset-right, 0px));
+}
+.welcome { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.4; }
+.group { display: grid; gap: 8px; min-width: 0; }
+.group h3 { margin: 0 0 0 2px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.panel { display: grid; gap: 12px; padding: 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); min-width: 0; }
+.field { display: flex; gap: 8px; min-width: 0; }
+input[type="password"], input[type="text"], select {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  padding: 11px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.field input { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; }
+.small-btn {
+  flex: none;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  background: var(--sunken);
+  padding: 0 12px;
+  font-size: .86rem;
+  font-weight: 600;
+}
+.row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.primary-btn { border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); padding: 11px 16px; font-weight: 700; }
+.row-btns a { color: var(--accent); font-weight: 600; font-size: .92rem; }
+.key-status { margin: 0; font-size: .88rem; line-height: 1.35; overflow-wrap: anywhere; }
+.key-status:empty { display: none; }
+.key-status.ok { color: var(--accent); font-weight: 600; }
+.key-status.bad { color: var(--bad); }
+.key-status.busy { color: var(--muted); }
+.note { margin: 0; font-size: .82rem; line-height: 1.42; color: var(--muted); }
+.choices { display: grid; gap: 8px; }
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--hair);
+  border-radius: 12px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.choice:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg)); }
+.choice input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+.choice span { display: grid; gap: 2px; min-width: 0; }
+.choice small { font-size: .8rem; line-height: 1.35; color: var(--muted); }
+.select-row { display: grid; gap: 8px; min-width: 0; }
+.select-row + .select-row { padding-top: 12px; border-top: 1px solid var(--hair); }
+.select-row > span { display: grid; gap: 2px; min-width: 0; }
+.select-row small { font-size: .8rem; line-height: 1.38; color: var(--muted); }
+.toggle { position: relative; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.toggle + .toggle { padding-top: 12px; border-top: 1px solid var(--hair); }
+.toggle > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.toggle small { font-size: .8rem; line-height: 1.38; color: var(--muted); }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle i { flex: none; position: relative; width: 50px; height: 30px; border-radius: 999px; background: var(--hair); transition: background .2s; }
+.toggle i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+  transition: transform .2s;
+}
+.toggle input:checked + i { background: var(--accent); }
+.toggle input:checked + i::after { transform: translateX(20px); }
+.toggle input:focus-visible + i { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.slider { display: grid; gap: 4px; min-width: 0; }
+.slider + .slider { padding-top: 12px; border-top: 1px solid var(--hair); }
+.slider-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.slider output { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.slider small { font-size: .8rem; line-height: 1.38; color: var(--muted); }
+.slider input[type="range"] { display: block; width: 100%; height: 30px; margin: 0; accent-color: var(--accent); }
+.row-btns .small-btn { padding: 8px 12px; }
+.small-btn:disabled { opacity: .45; }
+.tech dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: .8rem; line-height: 1.35; }
+.tech dt { color: var(--muted); }
+.tech dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.version { text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dot.on, .tr.wait::after { animation: none; }
+  .ring, .mic, .toggle i, .toggle i::after { transition: none; }
+  .sheet { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Anh → Việt</h1>
+      <p class="status"><span class="dot" id="dot"></span><span id="statusText">En pause</span></p>
+    </div>
+    <button type="button" class="icon-btn" id="clearBtn" aria-label="Effacer la conversation" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v5.5M14 11v5.5"/></svg>
+      <span class="confirm">Effacer ?</span>
+    </button>
+    <button type="button" class="icon-btn" id="settingsBtn" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9.5M18.5 7H20M4 17h3.5M12.5 17H20"/><circle cx="16" cy="7" r="2.4"/><circle cx="10" cy="17" r="2.4"/></svg>
+    </button>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden>
+    <p id="bannerText"></p>
+    <button type="button" id="bannerClose" aria-label="Fermer le message">×</button>
+  </div>
+
+  <main class="feed" id="feed" aria-label="Conversation traduite">
+    <section class="empty" id="empty">
+      <p class="empty-title">Touchez le micro et parlez anglais</p>
+      <p class="empty-text">Chaque phrase s'affiche en vietnamien, en grand, avec l'anglais en dessous. Tournez l'écran vers la personne : elle lit pendant que vous continuez à parler.</p>
+      <article class="line example" aria-label="Exemple de phrase traduite">
+        <span class="example-tag">Exemple</span>
+        <p class="tr" lang="vi">Bạn có thể nói chậm lại một chút được không?</p>
+        <p class="src" lang="en">Could you speak a little more slowly?</p>
+      </article>
+      <ul class="tips">
+        <li>Parlez près du micro, avec des phrases courtes : une petite pause et la phrase part.</li>
+        <li>De part et d'autre du micro, choisissez comment vous vous appelez (je) et comment vous appelez la personne (tu) : con → chú, em → chị…</li>
+        <li>Si la personne répond en vietnamien, sa réponse est laissée de côté.</li>
+        <li>Gardez cette page au premier plan : l'écran reste allumé pendant l'écoute.</li>
+      </ul>
+    </section>
+    <div class="lines" id="lines"></div>
+  </main>
+
+  <footer class="dock">
+    <button type="button" class="live-pill" id="livePill" hidden>↓ En direct</button>
+    <label class="pron pron-je"><small>je</small><select id="jeChip" aria-label="Je, en vietnamien"></select></label>
+    <button type="button" class="mic" id="micBtn" aria-label="Écouter" aria-pressed="false">
+      <span class="ring" aria-hidden="true"></span>
+      <svg class="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5M8.5 21.5h7"/></svg>
+      <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>
+    </button>
+    <label class="pron pron-tu"><small>tu</small><select id="tuChip" aria-label="Tu, en vietnamien"></select></label>
+    <p class="hint" id="hint">Toucher pour écouter</p>
+  </footer>
+</div>
+
+<div class="sheet-backdrop" id="sheet" hidden>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <header class="sheet-head">
+      <h2 id="sheetTitle">Réglages</h2>
+      <button type="button" class="text-btn" id="sheetDone">OK</button>
+    </header>
+    <div class="sheet-body">
+      <p class="welcome" id="welcome" hidden>Bienvenue. Pour commencer, collez votre clé API Qwen (Alibaba Cloud Model Studio).</p>
+
+      <section class="group">
+        <h3>Clé API Qwen</h3>
+        <div class="panel">
+          <div class="field">
+            <input id="keyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-…" aria-label="Clé API Qwen">
+            <button type="button" class="small-btn" id="pasteBtn">Coller</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" id="checkBtn">Vérifier et enregistrer</button>
+            <a href="https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key" target="_blank" rel="noopener noreferrer">Créer une clé</a>
+          </div>
+          <p class="key-status" id="keyStatus" aria-live="polite"></p>
+          <p class="note">Gardée seulement dans ce navigateur, envoyée uniquement à Alibaba Cloud. Créez-la dans Model Studio, région Singapour : c'est là que les nouveaux comptes ont un quota gratuit.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Serveur Qwen</h3>
+        <div class="panel">
+          <div class="choices" id="regionChoices" role="radiogroup" aria-label="Serveur Qwen"></div>
+          <input id="customInput" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://….aliyuncs.com" aria-label="Adresse du serveur" hidden>
+          <p class="note" id="customNote" hidden>Adresse d'un espace de travail Model Studio (…maas.aliyuncs.com) ou d'un relais (….workers.dev).</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Traduction</h3>
+        <div class="panel">
+          <div class="choices" id="modelChoices" role="radiogroup" aria-label="Modèle de traduction"></div>
+          <div class="select-row">
+            <span><b>« Je » et « tu » en vietnamien</b><small>Selon l'âge et la relation : con → cô, chú, bác, ông, bà · em → anh, chị · chị → em · tôi → bạn. Choisir « tu » met le « je » qui va avec, que vous pouvez changer ensuite. Aussi de part et d'autre du micro, pour changer en pleine conversation.</small></span>
+            <label class="pair" for="jeSelect"><span>Je</span><select id="jeSelect"></select></label>
+            <label class="pair" for="tuSelect"><span>Tu</span><select id="tuSelect"></select></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Écoute</h3>
+        <div class="panel">
+          <label class="select-row" for="langSelect">
+            <span><b>Langue parlée</b><small id="langSub"></small></span>
+            <select id="langSelect"></select>
+          </label>
+          <label class="select-row" for="vocabInput">
+            <span><b>Noms et mots à bien reconnaître</b><small>Séparés par des virgules : prénoms, lieux, termes de métier.</small></span>
+            <input id="vocabInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Linh, Bến Thành, Grab">
+          </label>
+        </div>
+      </section>
+
+      <section class="group" id="cutGroup">
+        <h3>Découpage des phrases</h3>
+        <div class="panel">
+          <label class="slider" for="pauseRange">
+            <span class="slider-head"><b>Fin de phrase</b><output id="pauseOut" for="pauseRange">1,0 s</output></span>
+            <input type="range" id="pauseRange" min="0.3" max="2" step="0.1" aria-describedby="pauseSub">
+            <small id="pauseSub">Silence après lequel la phrase part. Plus court : plus réactif, mais une phrase peut partir en deux morceaux.</small>
+          </label>
+          <label class="slider" for="maxRange">
+            <span class="slider-head"><b>Réplique longue</b><output id="maxOut" for="maxRange">6 s</output></span>
+            <input type="range" id="maxRange" min="3" max="15" step="1" aria-describedby="maxSub">
+            <small id="maxSub">Passé 6 s de parole, la phrase part à la première petite pause, au plus tard à 12 s.</small>
+          </label>
+          <div class="row-btns">
+            <button type="button" class="small-btn" id="cutReset">Valeurs par défaut</button>
+            <span class="note">S'applique tout de suite, même pendant l'écoute.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Micro</h3>
+        <div class="panel">
+          <select id="micSelect" aria-label="Micro utilisé"></select>
+          <p class="note" id="micNames" hidden>Les noms des micros apparaissent après une première écoute.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h3>Affichage</h3>
+        <div class="panel">
+          <label class="toggle">
+            <span><b>Texte vietnamien plus grand</b><small>Pour le lire de plus loin.</small></span>
+            <input type="checkbox" id="bigToggle"><i aria-hidden="true"></i>
+          </label>
+          <label class="toggle">
+            <span><b>Afficher le texte anglais</b></span>
+            <input type="checkbox" id="enToggle"><i aria-hidden="true"></i>
+          </label>
+        </div>
+      </section>
+
+      <section class="group tech">
+        <h3>Infos techniques</h3>
+        <div class="panel"><dl id="techInfo"></dl></div>
+      </section>
+
+      <p class="note version">Sur iPhone, ajoutez la page à l'écran d'accueil (Partager › Sur l'écran d'accueil) pour l'ouvrir comme une app. · Anh → Việt web 1.0</p>
+    </div>
+  </section>
+</div>
+<noscript><p class="note">Activez JavaScript pour utiliser Anh → Việt.</p></noscript>
+<script>// ─── Traitement du son et du texte ───────────────────────────────────────────
+// Code pur, sans dépendance au navigateur. Resampler, Segmenter, Agc, Turns et Capture tournent dans
+// l'AudioWorklet (thread audio) : leur source y est recopiée telle quelle, elles
+// ne doivent donc rien utiliser qui soit défini en dehors d'elles.
+
+/** Descend le flux du micro (44,1 ou 48 kHz) à 16 kHz : passe-bas 6e ordre à 7 kHz puis interpolation. */
+class Resampler {
+  constructor(inRate, outRate) {
+    this.ratio = inRate / outRate;
+    this.t = 0;
+    this.prev = 0;
+    this.filters = [];
+    if (inRate > outRate * 1.01) {
+      const fc = outRate * 0.4375;
+      const qs = [0.5176, 0.7071, 1.9319];
+      for (let i = 0; i < qs.length; i++) {
+        const w = 2 * Math.PI * fc / inRate;
+        const c = Math.cos(w);
+        const a = Math.sin(w) / (2 * qs[i]);
+        const a0 = 1 + a;
+        this.filters.push({
+          b0: (1 - c) / 2 / a0, b1: (1 - c) / a0, b2: (1 - c) / 2 / a0,
+          a1: -2 * c / a0, a2: (1 - a) / a0,
+          x1: 0, x2: 0, y1: 0, y2: 0
+        });
+      }
+    }
+  }
+
+  process(input) {
+    const n = input.length;
+    if (!n) return new Float32Array(0);
+    const x = new Float32Array(input);
+    for (let f = 0; f < this.filters.length; f++) {
+      const s = this.filters[f];
+      let x1 = s.x1, x2 = s.x2, y1 = s.y1, y2 = s.y2;
+      for (let i = 0; i < n; i++) {
+        const v = x[i];
+        const y = s.b0 * v + s.b1 * x1 + s.b2 * x2 - s.a1 * y1 - s.a2 * y2;
+        x2 = x1; x1 = v; y2 = y1; y1 = y;
+        x[i] = y;
+      }
+      s.x1 = x1; s.x2 = x2; s.y1 = y1; s.y2 = y2;
+    }
+    if (this.ratio === 1) return x;
+    const out = new Float32Array(Math.ceil((n - this.t) / this.ratio) + 1);
+    let k = 0;
+    let t = this.t;
+    while (t <= n - 1) {
+      const i = Math.floor(t);
+      const frac = t - i;
+      const a = i < 0 ? this.prev : x[i];
+      const b = i + 1 < n ? x[i + 1] : a;
+      out[k++] = a + (b - a) * frac;
+      t += this.ratio;
+    }
+    this.t = t - n;
+    this.prev = x[n - 1];
+    return out.subarray(0, k);
+  }
+}
+
+/**
+ * Découpe la parole en phrases (16 kHz mono, trames de 20 ms). Détection par énergie
+ * au-dessus d'un bruit de fond adaptatif (15e percentile des 2,5 dernières secondes).
+ * Portage exact de SpeechSegmenter.swift.
+ */
+class Segmenter {
+  constructor(tuning) {
+    const t = Object.assign({
+      endSilence: 0.45,      // silence qui clôt une phrase
+      maxSegment: 5.0,       // longueur max d'un extrait pendant un monologue
+      cutSearchWindow: 1.5,  // fenêtre où chercher le point le plus calme pour couper
+      preRoll: 0.4,          // audio gardé avant le début détecté (première syllabe)
+      tailKeep: 0.3,         // fin de phrase gardée (particules finales prononcées bas)
+      minVoiced: 0.2,        // parole effective minimale (ignore claquements, klaxons brefs)
+      startMarginDB: 8,
+      keepMarginDB: 5,
+      absoluteFloorDB: -58,
+      noiseWindow: 2.5
+    }, tuning || {});
+    this.t = t;
+    this.N = 320;
+    this.startFrames = 3;
+    this.calibrationFrames = 10;
+    const fd = this.N / 16000;
+    this.endSilenceFrames = Math.max(1, Math.round(t.endSilence / fd));
+    this.maxFrames = Math.max(20, Math.round(t.maxSegment / fd));
+    this.cutWindowFrames = Math.min(this.maxFrames - 1, Math.max(1, Math.round(t.cutSearchWindow / fd)));
+    this.idleCapacity = Math.max(0, Math.round(t.preRoll / fd)) + this.startFrames;
+    this.tailKeepFrames = Math.max(0, Math.round(t.tailKeep / fd));
+    this.minVoicedFrames = Math.max(1, Math.round(t.minVoiced / fd));
+    this.historySize = Math.max(25, Math.round(t.noiseWindow / fd));
+
+    this.buf = new Float32Array(this.N);
+    this.fill = 0;
+    this.history = [];
+    this.cursor = 0;
+    this.noiseFloor = -60;
+    this.framesSeen = 0;
+    this.idle = [];        // trames hors parole gardées pour le pré-roll : {f, e, v}
+    this.speechRun = 0;
+    this.inSpeech = false;
+    this.cur = [];         // trames de la phrase en cours
+    this.silenceRun = 0;
+    this.peak = 0;         // niveau max (0…1) depuis la dernière lecture, pour l'interface
+    this.onFrame = null;   // (parole ?, numéro de trame, niveau dB) : chaque trame, pour Turns
+  }
+
+  /** Ajoute des échantillons à 16 kHz. Renvoie les phrases terminées (Float32Array). */
+  push(input) {
+    const out = [];
+    let i = 0;
+    while (i < input.length) {
+      const take = Math.min(this.N - this.fill, input.length - i);
+      this.buf.set(input.subarray(i, i + take), this.fill);
+      this.fill += take;
+      i += take;
+      if (this.fill === this.N) {
+        const seg = this.frame(this.buf.slice());
+        this.fill = 0;
+        if (seg) out.push(seg);
+      }
+    }
+    return out;
+  }
+
+  /** À l'arrêt : rend la phrase en cours, même incomplète. */
+  flush() {
+    let seg = null;
+    if (this.inSpeech) {
+      const end = this.cur.length - this.silenceRun + Math.min(this.silenceRun, this.tailKeepFrames);
+      seg = this.make(end);
+    }
+    this.reset();
+    this.speechRun = 0;
+    this.idle = [];
+    this.fill = 0;
+    return seg;
+  }
+
+  frame(f) {
+    let sum = 0;
+    for (let k = 0; k < f.length; k++) sum += f[k] * f[k];
+    const db = 20 * Math.log10(Math.max(Math.sqrt(sum / f.length), 1e-6));
+    // Niveau affiché : écart au bruit de fond, pour qu'une voix lointaine fasse bouger l'anneau.
+    const ui = Math.min(1, Math.max(0, (db - this.noiseFloor - 3) / 27));
+    if (ui > this.peak) this.peak = ui;
+    this.framesSeen++;
+    this.pushHistory(db);
+
+    // Calibration : les premières trames estiment le bruit ambiant.
+    if (this.framesSeen <= this.calibrationFrames) {
+      this.noiseFloor = this.percentile();
+      this.pushIdle({ f: f, e: db, v: false });
+      if (this.onFrame) this.onFrame(false, this.framesSeen, db);
+      return null;
+    }
+
+    const t = this.t;
+    const isStart = db > Math.max(this.noiseFloor + t.startMarginDB, t.absoluteFloorDB);
+    const isKeep = db > Math.max(this.noiseFloor + t.keepMarginDB, t.absoluteFloorDB);
+    this.noiseFloor = this.noiseFloor * 0.8 + this.percentile() * 0.2;
+    if (this.onFrame) this.onFrame(isKeep, this.framesSeen, db);
+
+    if (!this.inSpeech) {
+      this.pushIdle({ f: f, e: db, v: isKeep });
+      this.speechRun = isStart ? this.speechRun + 1 : 0;
+      if (this.speechRun >= this.startFrames) {
+        // Début de parole : la phrase démarre avec le pré-roll.
+        this.inSpeech = true;
+        this.cur = this.idle;
+        this.idle = [];
+        this.silenceRun = 0;
+        this.speechRun = 0;
+      }
+      return null;
+    }
+
+    this.cur.push({ f: f, e: db, v: isKeep });
+    this.silenceRun = isKeep ? 0 : this.silenceRun + 1;
+
+    // Fin de phrase : assez de silence.
+    if (this.silenceRun >= this.endSilenceFrames) {
+      const total = this.cur.length;
+      const end = total - this.silenceRun + Math.min(this.silenceRun, this.tailKeepFrames);
+      const seg = this.make(end);
+      // Le silence de fin sert de pré-roll à la phrase suivante.
+      const keepFrom = Math.max(end, total - this.idleCapacity);
+      this.idle = this.cur.slice(keepFrom);
+      this.reset();
+      return seg;
+    }
+
+    // Monologue trop long : coupe au point le plus calme des dernières secondes.
+    if (this.cur.length >= this.maxFrames) {
+      const total = this.cur.length;
+      let cut = total - this.cutWindowFrames;
+      for (let k = cut; k < total; k++) {
+        if (this.cur[k].e < this.cur[cut].e) cut = k;
+      }
+      const end = cut + 1;
+      const seg = this.make(end);
+      this.cur = this.cur.slice(end);
+      let run = 0;
+      for (let k = this.cur.length - 1; k >= 0 && !this.cur[k].v; k--) run++;
+      this.silenceRun = run;
+      return seg;
+    }
+    return null;
+  }
+
+  make(count) {
+    const n = Math.min(Math.max(count, 0), this.cur.length);
+    let voiced = 0;
+    for (let k = 0; k < n; k++) if (this.cur[k].v) voiced++;
+    if (voiced < this.minVoicedFrames) return null;
+    const out = new Float32Array(n * this.N);
+    for (let k = 0; k < n; k++) out.set(this.cur[k].f, k * this.N);
+    return out;
+  }
+
+  reset() {
+    this.inSpeech = false;
+    this.cur = [];
+    this.silenceRun = 0;
+  }
+
+  pushIdle(fr) {
+    this.idle.push(fr);
+    const excess = this.idle.length - this.idleCapacity;
+    if (excess > 0) this.idle.splice(0, excess);
+  }
+
+  pushHistory(db) {
+    if (this.history.length < this.historySize) {
+      this.history.push(db);
+    } else {
+      this.history[this.cursor] = db;
+      this.cursor = (this.cursor + 1) % this.historySize;
+    }
+  }
+
+  /** Bruit de fond = 15e percentile des niveaux récents. */
+  percentile() {
+    if (!this.history.length) return -60;
+    const s = this.history.slice().sort(function (a, b) { return a - b; });
+    const v = s[Math.floor(s.length * 15 / 100)];
+    return Math.min(Math.max(v, -85), -25);
+  }
+}
+
+/**
+ * Gain automatique guidé par la parole, pour l'écoute continue (16 kHz, trames de 20 ms).
+ * Le micro est pris brut, sans traitement d'iOS : une voix à deux ou trois mètres arrive
+ * 20 à 30 dB plus bas qu'une voix collée au micro, trop bas pour que Gemini l'entende.
+ * On mesure le niveau de la parole seule (trames nettement au-dessus du bruit de fond) et on
+ * la ramène vers un niveau constant. Le gain ne suit que la parole et reste figé pendant les
+ * silences, pour ne pas faire monter le bruit ; il baisse tout de suite sur une voix forte,
+ * et un limiteur doux absorbe les attaques. Un passe-haut coupe le grondement sous ~75 Hz
+ * (moteurs, vent, téléphone manipulé), qui fausserait la mesure.
+ */
+class Agc {
+  constructor(options) {
+    const o = Object.assign({
+      target: -22,      // dBFS visé pour le haut de la parole (trames de 20 ms)
+      maxGain: 30,      // dB au plus : voix à deux ou trois mètres
+      minGain: -6,      // dB : baisse aussi une voix criée tout près du micro
+      startGain: 12,    // dB avant la première parole
+      rise: 0.5,        // dB par trame au moins quand le gain monte…
+      riseFrac: 0.15,   // …ou cette part de l'écart : une voix lointaine est remontée en ~0,5 s
+      fall: 2,          // dB par trame quand il baisse (100 dB/s)
+      up: 0.25,         // suivi d'une voix plus forte (part de l'écart rattrapée par trame)
+      down: 0.08,       // suivi d'une voix plus faible
+      hot: -10,         // trame plus forte que ça après gain : baisse immédiate
+      margin: 6,        // dB au-dessus du bruit de fond pour compter comme parole
+      floor: -66,       // dBFS : en dessous, jamais de la parole
+      noiseWindow: 2.5  // s : fenêtre du bruit de fond
+    }, options || {});
+    this.o = o;
+    this.N = 320;
+    this.sum = 0;
+    this.n = 0;
+    this.x1 = 0;
+    this.y1 = 0;
+    this.history = [];
+    this.historySize = Math.max(25, Math.round(o.noiseWindow * 16000 / this.N));
+    this.cursor = 0;
+    this.level = o.target - o.startGain;   // haut de la parole, avant gain (dBFS)
+    this.gainDb = o.startGain;
+    this.g = Math.pow(10, o.startGain / 20);   // gain appliqué, en rampe vers gainDb
+    this.step = 0;
+    this.limited = 0;   // échantillons passés par le limiteur
+  }
+
+  /** Filtre et amplifie sur place ; renvoie le même tableau. */
+  process(x) {
+    for (let i = 0; i < x.length; i++) {
+      const v = x[i] - this.x1 + 0.97 * this.y1;
+      this.x1 = x[i];
+      this.y1 = v;
+      this.sum += v * v;
+      let y = v * this.g;
+      this.g += this.step;
+      const a = y < 0 ? -y : y;
+      if (a > 0.9) {
+        y = (y < 0 ? -1 : 1) * (0.9 + 0.1 * Math.tanh((a - 0.9) / 0.1));
+        this.limited++;
+      }
+      x[i] = y;
+      if (++this.n === this.N) this.frame();
+    }
+    return x;
+  }
+
+  frame() {
+    const o = this.o;
+    const db = 10 * Math.log10(Math.max(this.sum / this.N, 1e-12));
+    this.sum = 0;
+    this.n = 0;
+    if (this.history.length < this.historySize) this.history.push(db);
+    else {
+      this.history[this.cursor] = db;
+      this.cursor = (this.cursor + 1) % this.historySize;
+    }
+    const sorted = this.history.slice().sort(function (a, b) { return a - b; });
+    const noise = sorted[Math.floor(sorted.length * 15 / 100)];
+    // Parole : suit vite une voix plus forte, lentement une voix plus faible.
+    if (this.history.length >= 10 && db > Math.max(noise + o.margin, o.floor)) {
+      this.level += (db > this.level ? o.up : o.down) * (db - this.level);
+    }
+    const goal = Math.min(o.maxGain, Math.max(o.minGain, o.target - this.level));
+    const climb = Math.max(o.rise, o.riseFrac * (goal - this.gainDb));
+    let gain = goal > this.gainDb ? Math.min(goal, this.gainDb + climb) : Math.max(goal, this.gainDb - o.fall);
+    if (db + gain > o.hot) gain = Math.max(o.minGain, o.hot - db);
+    this.gainDb = gain;
+    this.step = (Math.pow(10, gain / 20) - this.g) / this.N;
+  }
+}
+
+/**
+ * Phrases de l'écoute continue : une fenêtre = une phrase ou une réplique, que Gemini transcrit
+ * d'un bloc et qui est traduite d'un bloc. Elle se ferme sur une vraie pause (endSilence) ;
+ * pendant un long monologue, sur la première courte pause passé softMax de parole, au plus tard
+ * à hardMax. Un long silence est aussi refermé (idleMax), toujours pendant le silence.
+ *
+ * La parole est repérée par rapport au bruit de fond mesuré sur les 10 dernières secondes (les
+ * moments les plus calmes) : après une voix forte, une réponse plus faible est entendue tout de
+ * suite, au lieu d'être prise pour du silence le temps que la mesure redescende.
+ */
+class Turns {
+  constructor(tuning) {
+    this.hist = null;
+    this.floor = -90;
+    this.setTuning(tuning);
+    this.reset(0);
+  }
+
+  /** Nouveaux réglages, sans couper la phrase en cours ni perdre la mesure du bruit de fond. */
+  setTuning(tuning) {
+    const t = Object.assign({
+      endSilence: 1.0,   // pause qui clôt une phrase
+      softMax: 6,        // passé cette durée depuis le premier mot, une courte pause suffit…
+      softPause: 0.25,   // …de cette longueur
+      hardMax: 12,       // durée maximale depuis le premier mot
+      idleMax: 20,       // fenêtre sans parole refermée après cette durée
+      minVoiced: 0.2,    // parole minimale pour qu'une fenêtre compte
+      margin: 6,         // dB au-dessus du bruit de fond pour compter comme parole
+      floorWindow: 10,   // s : fenêtre de mesure du bruit de fond
+      absoluteFloorDB: -66
+    }, tuning || {});
+    const fd = 0.02;
+    this.t = t;
+    this.endFrames = Math.max(1, Math.round(t.endSilence / fd));
+    this.softFrames = Math.max(1, Math.round(t.softMax / fd));
+    this.pauseFrames = Math.max(1, Math.round(t.softPause / fd));
+    this.hardFrames = Math.max(this.softFrames, Math.round(t.hardMax / fd));
+    this.idleFrames = Math.max(1, Math.round(t.idleMax / fd));
+    this.minVoiced = Math.max(1, Math.round(t.minVoiced / fd));
+    const n = Math.max(50, Math.round(t.floorWindow / fd));
+    if (!this.hist || this.hist.length !== n) {
+      this.hist = new Float64Array(n);
+      this.histLen = 0;
+      this.histPos = 0;
+    }
+  }
+
+  /** Parole dans cette trame ? (niveau en dB par rapport au bruit de fond des 10 dernières secondes) */
+  isVoiced(db) {
+    const h = this.hist;
+    h[this.histPos] = db;
+    this.histPos = (this.histPos + 1) % h.length;
+    if (this.histLen < h.length) this.histLen++;
+    if (this.histLen < 10) return false;
+    if (this.histLen < 50 || this.histPos % 5 === 0) {
+      const sorted = Array.prototype.slice.call(h, 0, this.histLen).sort(function (a, b) { return a - b; });
+      this.floor = sorted[Math.floor(this.histLen * 0.05)];
+    }
+    return db > Math.max(this.floor + this.t.margin, this.t.absoluteFloorDB);
+  }
+
+  reset(at) {
+    this.start = at;
+    this.frames = 0;
+    this.voiced = 0;
+    this.run = 0;
+    this.silence = 0;
+    this.first = -1;
+    this.last = -1;
+    this.spoke = false;
+  }
+
+  /**
+   * Trame de 20 ms finissant à `end` (position en échantillons), de niveau `db`. Rend
+   * { type: 'speech' } au début de la parole, { type: 'cut' } à la fin de la fenêtre, sinon null.
+   */
+  frame(db, end) {
+    const keep = this.isVoiced(db);
+    this.lastKeep = keep;
+    this.frames++;
+    let event = null;
+    // Une trame isolée au-dessus du bruit (claquement, klaxon bref) ne compte pas : il en faut deux de suite.
+    this.run = keep ? this.run + 1 : 0;
+    if (this.run >= 2) {
+      if (this.first < 0) this.first = end - 640;
+      this.voiced += this.run === 2 ? 2 : 1;
+      this.last = end;
+      this.silence = 0;
+      if (!this.spoke && this.voiced >= this.minVoiced) {
+        this.spoke = true;
+        event = { type: 'speech', at: end };
+      }
+    } else {
+      this.silence++;
+    }
+    const speech = this.voiced >= this.minVoiced;
+    if (!speech) {
+      // Pas encore de vraie parole : un bruit bref suivi d'une pause est oublié, et un long
+      // silence est refermé (pendant le silence, donc sans couper personne).
+      if (this.first >= 0 && this.silence >= this.endFrames) { this.first = -1; this.last = -1; this.voiced = 0; }
+      if (this.frames >= this.idleFrames && this.silence >= this.endFrames) return this.cut(end, 'silence');
+      return event;
+    }
+    const spoken = (end - this.first) / 320;   // trames depuis le premier mot
+    if (this.silence >= this.endFrames) return this.cut(end, 'pause');
+    if ((spoken >= this.softFrames && this.silence >= this.pauseFrames) || spoken >= this.hardFrames) return this.cut(end, 'longue réplique');
+    return event;
+  }
+
+  /**
+   * La phrase en cours est partie jusqu'à `at` sans passer par ici (autre voix repérée par
+   * l'app) : la durée d'une réplique longue se compte désormais depuis `at`.
+   */
+  rebase(at) {
+    if (!(at > this.start)) return;
+    this.start = at;
+    if (this.first >= 0 && this.first < at) this.first = at;
+  }
+
+  /** Ferme la fenêtre à la position `at` et en ouvre une nouvelle. */
+  cut(at, why) {
+    const w = {
+      type: 'cut', at: at, start: this.start, first: this.first, last: this.last,
+      voiced: this.voiced * 0.02, speech: this.voiced >= this.minVoiced, why: why || 'arrêt'
+    };
+    this.reset(at);
+    return w;
+  }
+}
+
+/**
+ * Chaîne du micro à 16 kHz, commune à l'AudioWorklet et au mode de secours (ScriptProcessor).
+ * Par extraits : rend chaque phrase découpée (« segment »). En continu : flux PCM 16 bits par
+ * morceaux de 100 ms avec gain automatique, et marqueurs de fin de phrase (« cut ») placés
+ * exactement entre deux morceaux. `post(message, transferts)` reçoit les messages pour l'app.
+ */
+class Capture {
+  constructor(options, post) {
+    const o = options || {};
+    this.post = post;
+    this.stream = !!o.stream;
+    this.pos = 0;          // échantillons à 16 kHz reçus depuis le début
+    this.agc = new Agc();
+    this.pcm = new Int16Array(1600);
+    this.fill = 0;
+    this.events = [];
+    this.vad = [];         // parole (1) ou non (0) de chaque trame de 20 ms depuis le dernier morceau
+    this.vadEnd = 0;       // position de fin de la dernière de ces trames
+    this.count = 0;
+    this.retune(o.tuning, o.turns);
+  }
+
+  retune(tuning, turns) {
+    const self = this;
+    this.seg = new Segmenter(tuning);
+    this.segBase = this.pos;
+    this.seg.onFrame = function (keep, n, db) { self.frame(db, self.segBase + n * 320); };
+    this.turns = new Turns(turns);
+    this.turns.reset(this.pos);
+  }
+
+  frame(db, end) {
+    if (!this.stream) return;
+    const e = this.turns.frame(db, end);
+    this.vad.push(this.turns.lastKeep ? 1 : 0);
+    this.vadEnd = end;
+    if (e) this.events.push(e);
+  }
+
+  /** Échantillons à 16 kHz (modifiés sur place en continu). */
+  process(down) {
+    const base = this.pos;
+    const segs = this.seg.push(down);
+    if (this.stream) {
+      this.agc.process(down);
+      let k = 0;
+      for (let i = 0; i < down.length; i++) {
+        const v = down[i] > 1 ? 1 : down[i] < -1 ? -1 : down[i];
+        this.pcm[this.fill++] = v < 0 ? v * 32768 : v * 32767;
+        const at = base + i + 1;
+        if (this.fill === 1600) this.sendPcm(at);
+        while (k < this.events.length && this.events[k].at <= at) {
+          const e = this.events[k++];
+          if (e.type === 'cut') this.sendPcm(at);
+          this.post(e);
+        }
+      }
+      while (k < this.events.length) this.post(this.events[k++]);
+      this.events.length = 0;
+    } else {
+      for (const s of segs) this.post({ type: 'segment', samples: s }, [s.buffer]);
+    }
+    this.pos = base + down.length;
+    this.count += down.length;
+    if (this.count >= 800) {
+      this.post({ type: 'level', v: this.seg.peak, gain: this.stream ? this.agc.gainDb : null });
+      this.seg.peak = 0;
+      this.count = 0;
+    }
+  }
+
+  sendPcm(at) {
+    if (!this.fill) return;
+    let data;
+    if (this.fill === this.pcm.length) {
+      data = this.pcm;
+      this.pcm = new Int16Array(1600);
+    } else {
+      data = this.pcm.slice(0, this.fill);
+    }
+    this.fill = 0;
+    // Décisions parole / silence des trames finies depuis le morceau précédent (pour l'app).
+    const vad = Uint8Array.from(this.vad);
+    this.vad.length = 0;
+    this.post({ type: 'pcm', data: data, end: at, vad: vad, vadEnd: this.vadEnd }, [data.buffer]);
+  }
+
+  /** Commandes de l'app : stream (continu ou extraits), flush (rendre la phrase en cours), tune. */
+  command(m) {
+    if (m.type === 'stream') {
+      this.stream = !!m.on;
+      this.turns.reset(this.pos);
+      return;
+    }
+    if (m.type === 'tune' && this.stream) {
+      // En continu : les nouveaux seuils valent tout de suite, phrase en cours comprise.
+      this.turns.setTuning(m.turns);
+      return;
+    }
+    if (m.type === 'rebase') { this.turns.rebase(m.at); return; }
+    if (m.type !== 'flush' && m.type !== 'tune') return;
+    if (this.stream) {
+      this.sendPcm(this.pos);
+      this.post(this.turns.cut(this.pos));
+    } else {
+      const s = this.seg.flush();
+      // La trame entamée est abandonnée : on recale la position des trames suivantes.
+      this.segBase = this.pos - this.seg.framesSeen * 320;
+      if (s) this.post({ type: 'segment', samples: s }, [s.buffer]);
+    }
+    if (m.type === 'tune') this.retune(m.tuning, m.turns);
+    else this.post({ type: 'flushed', id: m.id });
+  }
+}
+
+/** WAV PCM 16 bits mono. Remonte les voix lointaines (gain plafonné à ×16). */
+function encodeWAV(samples, rate) {
+  let peak = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const a = Math.abs(samples[i]);
+    if (a > peak) peak = a;
+  }
+  const gain = peak > 0.0005 ? Math.min(0.89 / peak, 16) : 1;
+  const n = samples.length;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const text = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  text(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); text(8, 'WAVE');
+  text(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  text(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i] * gain));
+    v.setInt16(44 + i * 2, Math.round(s * 32767), true);
+  }
+  return new Uint8Array(buf);
+}
+
+function toBase64(bytes) {
+  if (typeof bytes.toBase64 === 'function') return bytes.toBase64();
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+/** Vide ou seulement de la ponctuation (« - », « […] », « … »). */
+function isBlank(text) {
+  return /^[\s\-–—.…\[\]()?]*$/.test(text || '');
+}
+
+/** Aucune parole : vide, ponctuation, ou seulement des bruits notés entre crochets ou parenthèses ([vỗ tay], (cười)…). */
+function isNoiseOnly(text) {
+  return isBlank(String(text || '').replace(/\[[^\]]*\]|\([^)]*\)/g, ' '));
+}
+
+/** Lit « VI: … / FR: … / TON: … », y compris une réponse partielle pendant le streaming. */
+function parseResponse(raw) {
+  const label = (name, line) => {
+    if (line.length < name.length || line.slice(0, name.length).toUpperCase() !== name) return null;
+    const rest = line.slice(name.length).replace(/^ +/, '');
+    if (rest[0] !== ':' && rest[0] !== '：') return null;
+    return rest.slice(1).trim();
+  };
+  let field = null;
+  const vi = [], fr = [];
+  let tone = '';
+  for (const rawLine of String(raw || '').split(/\r\n|[\n\r\u2028\u2029\u0085\v\f]/)) {
+    const line = rawLine.split('**').join('').trim();
+    let value;
+    if ((value = label('VI', line)) !== null) { field = 'vi'; vi.push(value); }
+    else if ((value = label('FR', line)) !== null) { field = 'fr'; fr.push(value); }
+    else if ((value = label('TON', line)) !== null) { field = 'ton'; tone += value; }
+    else if (line) {
+      if (field === 'vi') vi.push(line);
+      else if (field === 'fr') fr.push(line);
+    }
+  }
+  const join = (parts) => parts.filter(Boolean).join(' ').trim();
+  const digit = tone.match(/\d/);
+  const value = digit ? Number(digit[0]) : NaN;
+  return { vi: join(vi), fr: join(fr), tone: value >= 0 && value <= 3 ? value : null };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { Resampler, Segmenter, Agc, Turns, Capture, encodeWAV, toBase64, isBlank, isNoiseOnly, parseResponse };
+}
+
+// ─── Anh → Việt : interprète anglais → vietnamien, avec Qwen ─────────────────
+// Même principe que Thông Dịch : le découpage en phrases tourne sur le thread audio
+// (AudioWorklet) et chaque phrase part aussitôt, en parallèle des précédentes. Qwen3-ASR-Flash
+// l'écrit (en anglais, ou en français), puis un modèle Qwen la traduit en vietnamien avec le fil
+// de la conversation. Rien n'est perdu pendant qu'une phrase est en cours.
+//
+// Les appels passent par l'API « DashScope » de Model Studio (…/api/v1/services/aigc/…), en
+// JSON, sans streaming et sans en-tête particulier : la forme que Model Studio accepte depuis
+// une page web, d'après les essais d'autres projets (« Vérifier et enregistrer » le confirme).
+// Son API compatible OpenAI, elle, n'envoie pas les en-têtes CORS : une page web ne peut pas la lire.
+
+const RATE = 16000;
+const ASR_MODEL = 'qwen3-asr-flash';
+const PATHS = {
+  mm: '/api/v1/services/aigc/multimodal-generation/generation',    // audio, et modèles Qwen3.5 et suivants
+  text: '/api/v1/services/aigc/text-generation/generation'         // modèles texte (Qwen-MT)
+};
+const REGIONS = [
+  { id: 'sg', title: 'Singapour (international)', sub: 'Pour une clé créée dans la région Singapour de Model Studio (recommandé).', base: 'https://dashscope-intl.aliyuncs.com' },
+  { id: 'cn', title: 'Pékin (Chine continentale)', sub: 'Pour une clé créée dans la région Pékin.', base: 'https://dashscope.aliyuncs.com' },
+  { id: 'custom', title: 'Autre adresse', sub: "Espace de travail Model Studio ou relais.", base: '' }
+];
+// Modèles de traduction. Si un modèle n'existe pas pour ce compte ou cette région, l'app passe
+// au suivant de sa liste de secours, sans rien perdre.
+const MODELS = [
+  { id: 'qwen3.7-flash', api: 'mm', title: 'Rapide', sub: 'Qwen3.7 Flash · suit le fil de la conversation (recommandé)', fallback: ['qwen3.6-flash', 'qwen3.5-flash'] },
+  { id: 'qwen3.7-plus', api: 'mm', title: 'Soigné', sub: 'Qwen3.7 Plus · tournures plus naturelles, un peu plus lent', fallback: ['qwen3.6-plus', 'qwen3.7-flash', 'qwen3.6-flash'] },
+  { id: 'qwen-mt-flash', api: 'text', mt: true, title: 'Spécialisé', sub: 'Qwen-MT Flash · modèle de traduction, phrase par phrase, sans le fil', fallback: ['qwen-mt-plus', 'qwen3.7-flash'] }
+];
+// Pronoms : le vietnamien dit « je » et « tu » selon l'âge et la relation. On choisit comment on
+// s'appelle (je) et comment on appelle la personne en face (tu) ; choisir « tu » met le « je » qui
+// va avec (con → chú…), qu'on peut changer ensuite.
+const JE = [
+  { id: 'tôi', label: 'tôi · neutre' },
+  { id: 'con', label: 'con · à cô, chú, bác, ông, bà' },
+  { id: 'em', label: 'em · à anh, chị' },
+  { id: 'chị', label: 'chị · à plus jeune' },
+  { id: 'auto', label: 'Qwen choisit' }
+];
+const TU = [
+  { id: 'bạn', pair: 'tôi', label: 'bạn · neutre', who: 'someone of about the same age, or a stranger' },
+  { id: 'anh', pair: 'em', label: 'anh · homme un peu plus âgé', who: 'a man a little older than the speaker' },
+  { id: 'chị', pair: 'em', label: 'chị · femme un peu plus âgée', who: 'a woman a little older than the speaker' },
+  { id: 'em', pair: 'chị', label: 'em · plus jeune', who: 'someone younger than the speaker' },
+  { id: 'cô', pair: 'con', label: 'cô · femme, âge des parents', who: 'a woman of the speaker’s parents’ generation' },
+  { id: 'chú', pair: 'con', label: 'chú · homme, âge des parents', who: 'a man of the speaker’s parents’ generation, younger than her father' },
+  { id: 'bác', pair: 'con', label: 'bác · plus âgé que les parents', who: 'a man or a woman older than the speaker’s parents' },
+  { id: 'ông', pair: 'con', label: 'ông · homme âgé', who: 'an elderly man' },
+  { id: 'bà', pair: 'con', label: 'bà · femme âgée', who: 'an elderly woman' },
+  { id: 'auto', pair: 'auto', label: 'Qwen choisit', who: '' }
+];
+const LANGS = [
+  { id: 'auto', label: 'Anglais ou français (auto)', sub: "Recommandé : la langue est reconnue à chaque phrase, et les réponses en vietnamien de la personne en face sont laissées de côté." },
+  { id: 'en', label: 'Toujours l’anglais', sub: "Reconnaissance un peu plus sûre si personne d'autre ne parle. Une réponse en vietnamien serait alors mal comprise." }
+];
+const FORCE_SCRIPT_PROCESSOR = /[?&]audio=script\b/.test(location.search);
+
+// ─── Réglages (gardés dans ce navigateur seulement) ──────────────────────────
+// Préfixe propre à cette app : Thông Dịch, sur le même site, garde les siens à part.
+const store = {
+  get(key, fallback) {
+    try {
+      const raw = localStorage.getItem('av.' + key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch (e) { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem('av.' + key, JSON.stringify(value)); } catch (e) { /* stockage indisponible */ }
+  }
+};
+
+const CUT_DEFAULTS = { pause: 1.0, maxLen: 6 };
+const S = {
+  apiKey: store.get('apiKey', ''),
+  region: store.get('region', 'sg'),
+  customBase: store.get('customBase', ''),
+  model: store.get('model', MODELS[0].id),
+  je: store.get('je', 'tôi'),
+  tu: store.get('tu', 'bạn'),
+  lang: store.get('lang', 'auto'),
+  vocab: store.get('vocab', ''),
+  pause: store.get('pause', CUT_DEFAULTS.pause),
+  maxLen: store.get('maxLen', CUT_DEFAULTS.maxLen),
+  showEn: store.get('showEn', true),
+  big: store.get('big', false),
+  micId: store.get('micId', ''),
+  micLabel: store.get('micLabel', '')
+};
+if (!REGIONS.some((r) => r.id === S.region)) S.region = 'sg';
+if (!MODELS.some((m) => m.id === S.model)) S.model = MODELS[0].id;
+if (!JE.some((p) => p.id === S.je)) S.je = 'tôi';
+if (!TU.some((p) => p.id === S.tu)) S.tu = 'bạn';
+if (!LANGS.some((l) => l.id === S.lang)) S.lang = 'auto';
+const clampNum = (v, lo, hi, def) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
+S.pause = Math.round(clampNum(S.pause, 0.3, 2, CUT_DEFAULTS.pause) * 10) / 10;
+S.maxLen = Math.round(clampNum(S.maxLen, 3, 15, CUT_DEFAULTS.maxLen));
+function save(key, value) { S[key] = value; store.set(key, value); }
+
+// ─── Client Qwen (Model Studio, API DashScope) ───────────────────────────────
+const tech = { mode: '', rate: 0, gain: null, asr: null, tr: null, probe: null };
+
+class QwenError extends Error {
+  constructor(kind, message, status, code) {
+    super(message);
+    this.kind = kind;          // http, network, timeout, parse, config
+    this.status = status || 0;
+    this.code = code || '';
+  }
+}
+
+/** Adresse du serveur : celle de la région, ou une adresse saisie (vérifiée), sans le chemin d'API. */
+function apiBase() {
+  if (S.region === 'custom') return cleanBase(S.customBase);
+  return (REGIONS.find((r) => r.id === S.region) || REGIONS[0]).base;
+}
+
+function cleanBase(url) {
+  let u = String(url || '').trim();
+  if (!u) return '';
+  if (!/^https:\/\//i.test(u)) u = 'https://' + u.replace(/^[a-z]+:\/\//i, '');
+  try {
+    const p = new URL(u);
+    // La politique de sécurité de la page n'autorise que ces domaines.
+    if (!/(^|\.)aliyuncs\.com$|\.workers\.dev$/i.test(p.hostname)) return '';
+    const path = p.pathname.replace(/\/+$/, '').replace(/\/(api\/v1|compatible-mode\/v1)(\/.*)?$/i, '');
+    return p.origin + path;
+  } catch (e) { return ''; }
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** POST JSON vers Model Studio. Rend la réponse décodée, ou lève une QwenError. */
+async function qwenPost(api, body, timeoutMs) {
+  const base = apiBase();
+  if (!base) throw new QwenError('config', 'Adresse du serveur Qwen invalide (Réglages › Serveur Qwen).');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res, raw;
+  try {
+    res = await fetch(base + PATHS[api], {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'omit',
+      signal: ctrl.signal
+    });
+    raw = await res.text();
+  } catch (e) {
+    const late = ctrl.signal.aborted;
+    throw new QwenError(late ? 'timeout' : 'network', late ? 'Délai dépassé.' : 'Réseau indisponible.');
+  } finally {
+    clearTimeout(timer);
+  }
+  let json = null;
+  try { json = JSON.parse(raw); } catch (e) { /* pas du JSON */ }
+  if (!res.ok || (json && json.code && !json.output)) {
+    const code = (json && json.code) || '';
+    const message = (json && json.message) || String(raw || '').slice(0, 200) || 'HTTP ' + res.status;
+    throw new QwenError('http', message, res.status, code);
+  }
+  if (!json || !json.output) throw new QwenError('parse', 'Réponse illisible de Qwen.');
+  return json;
+}
+
+const isKeyError = (e) => !!e && e.kind === 'http' && (e.status === 401 || /InvalidApiKey/i.test(e.code));
+const isAccountError = (e) => !!e && e.kind === 'http' && /Arrearage|FreeTierOnly|Overdue|AccountStatus/i.test(e.code + ' ' + e.message);
+const isModelError = (e) => !!e && e.kind === 'http' && !isKeyError(e) && !isAccountError(e) &&
+  (e.status === 404 || ((e.status === 400 || e.status === 403) && /model|enable_thinking|AccessDenied|not (exist|found|support)/i.test(e.code + ' ' + e.message)));
+const isTransient = (e) => !!e && (e.kind === 'network' || e.kind === 'timeout' || (e.kind === 'http' && (e.status === 429 || e.status >= 500)));
+
+function errorMessage(err) {
+  if (!err) return 'Erreur inconnue.';
+  if (err.kind === 'config' || err.kind === 'parse') return err.message;
+  if (err.kind === 'timeout') return 'Délai dépassé (réseau lent).';
+  if (err.kind === 'network') {
+    return navigator.onLine === false ? 'Pas de connexion internet.'
+      : 'Qwen ne répond pas depuis cette page (réseau coupé, ou appel refusé par le serveur).';
+  }
+  const t = err.code + ' ' + err.message;
+  if (isKeyError(err)) return "Clé refusée par Qwen : vérifiez qu'elle est complète et qu'elle vient de la région choisie dans « Serveur Qwen ».";
+  if (/FreeTierOnly/i.test(t)) return 'Quota gratuit épuisé : dans Model Studio, désactivez « Free tier only » pour continuer en payant.';
+  if (/Arrearage|Overdue/i.test(t)) return 'Compte Alibaba Cloud en impayé : rechargez-le ou ajoutez un moyen de paiement.';
+  if (err.status === 429) return 'Trop de requêtes en même temps chez Qwen : nouvel essai automatique.';
+  if (/DataInspection/i.test(t)) return 'Passage refusé par le filtre de contenu de Qwen.';
+  if (isModelError(err)) return 'Modèle indisponible pour ce compte ou cette région (' + err.message + ').';
+  if (err.status >= 500) return 'Qwen est momentanément indisponible (erreur ' + err.status + ').';
+  return 'Erreur ' + err.status + ' : ' + err.message;
+}
+
+/** Erreur en quelques mots, pour le journal. */
+function shortError(err) {
+  if (!err) return 'erreur';
+  if (err.kind === 'http') return (err.code || 'erreur') + ' ' + err.status;
+  return { network: 'réseau', timeout: 'délai dépassé', parse: 'réponse illisible', config: 'adresse invalide' }[err.kind] || 'erreur';
+}
+
+/** Un essai de plus sur une erreur passagère (réseau, surcharge, trop de requêtes). */
+async function withRetry(fn) {
+  try { return await fn(); } catch (e) {
+    if (!isTransient(e) || (e.kind === 'network' && navigator.onLine === false)) throw e;
+    await sleep(e.status === 429 ? 1500 : 400);
+    return fn();
+  }
+}
+
+/** Texte de la réponse : `content` est une liste de { text } (modèles multimodaux) ou une chaîne. */
+function contentText(json) {
+  const out = json && json.output;
+  const choice = out && out.choices && out.choices[0];
+  const c = choice && choice.message ? choice.message.content : out && out.text;
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) return c.map((p) => (p && typeof p.text === 'string' ? p.text : '')).join('');
+  return '';
+}
+
+/** Langue reconnue par Qwen3-ASR (« en », « fr », « vi »…), ou ''. */
+function detectedLang(json) {
+  const choice = json && json.output && json.output.choices && json.output.choices[0];
+  const notes = choice && choice.message && choice.message.annotations;
+  const info = Array.isArray(notes) && notes.find((a) => a && a.language);
+  return info ? String(info.language).toLowerCase() : '';
+}
+
+function vocabList() {
+  return String(S.vocab || '').split(/[,;\n]/).map((w) => w.trim().slice(0, 40)).filter(Boolean).slice(0, 40);
+}
+
+// ─── Transcription : Qwen3-ASR-Flash ─────────────────────────────────────────
+async function transcribe(audio, sec) {
+  const messages = [];
+  const vocab = vocabList();
+  // Contexte de Qwen3-ASR : liste de noms et de termes, pour les écrire juste.
+  if (vocab.length) messages.push({ role: 'system', content: [{ text: vocab.join(', ') }] });
+  messages.push({ role: 'user', content: [{ audio: 'data:audio/wav;base64,' + audio }] });
+  const asrOptions = { enable_itn: true };   // nombres en chiffres
+  if (S.lang === 'en') asrOptions.language = 'en';
+  const body = { model: ASR_MODEL, input: { messages }, parameters: { asr_options: asrOptions } };
+  const json = await withRetry(() => qwenPost('mm', body, Math.max(8000, 4000 + sec * 1000)));
+  return { text: contentText(json).trim(), lang: detectedLang(json) };
+}
+
+// ─── Traduction ──────────────────────────────────────────────────────────────
+const trState = { dead: new Set(), used: '', note: '' };
+
+function chosenModel() { return MODELS.find((m) => m.id === S.model) || MODELS[0]; }
+function modelInfo(id) {
+  return MODELS.find((m) => m.id === id) || { id, api: /^qwen-mt-/.test(id) ? 'text' : 'mm', mt: /^qwen-mt-/.test(id) };
+}
+/** Le modèle choisi, ou le premier de ses secours encore disponible. */
+function activeModel() {
+  const chain = [S.model].concat(chosenModel().fallback || []);
+  const id = chain.find((m) => !trState.dead.has(m)) || S.model;
+  return modelInfo(id);
+}
+/** « qwen3.6-flash » → « Qwen3.6 Flash », « qwen-mt-plus » → « Qwen-MT Plus ». */
+function modelName(id) {
+  const m = MODELS.find((x) => x.id === id);
+  if (m) return m.sub.split(' · ')[0];
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  const s = String(id);
+  if (/^qwen-mt-/.test(s)) return 'Qwen-MT ' + cap(s.slice(8));
+  return s.replace(/^qwen([\d.]+)-(\w+)$/, (x, v, n) => 'Qwen' + v + ' ' + cap(n));
+}
+
+/** Consigne des pronoms, d'après les choix « je » et « tu ». */
+function pronounRule() {
+  if (S.je === 'auto' && S.tu === 'auto') {
+    return 'choose natural Vietnamese pronouns from the context and keep them consistent; when unsure, use “tôi” and “bạn”.';
+  }
+  const tu = TU.find((p) => p.id === S.tu) || TU[0];
+  const me = S.je === 'auto' ? 'choose from the context how the speaker calls herself'
+    : 'the speaker calls herself “' + S.je + '” (for I, me and my)';
+  const you = tu.id === 'auto' ? 'choose from the context how to address the listener'
+    : 'address the listener as “' + tu.id + '”, ' + tu.who + ' (for you and your; for several listeners, the usual plural)';
+  const polite = ['con', 'em'].includes(S.je) || ['anh', 'chị', 'cô', 'chú', 'bác', 'ông', 'bà'].includes(tu.id);
+  return me + '; ' + you + '.' +
+    (polite ? ' Be polite, as with an elder: use “dạ” and “ạ” where Vietnamese speakers naturally would, without changing the meaning.' : '') +
+    ' Keep these pronouns in every sentence.';
+}
+/** Jeu de pronoms en vigueur : le fil de la conversation ne mélange pas deux jeux. */
+function pronounKey() { return S.je + '/' + S.tu; }
+
+function systemPrompt() {
+  const vocab = vocabList();
+  return [
+    'You are a live interpreter in Ho Chi Minh City. Someone is speaking, usually in English (sometimes in French), to Vietnamese people. You receive the automatic transcript of what they just said, one sentence or phrase at a time, and translate it into Vietnamese so the listeners can read it on a phone screen.',
+    '',
+    'Rules:',
+    '- Faithful and complete: keep every idea, question, number, name and nuance. Never add, explain, summarize, or answer the speaker.',
+    '- Natural, everyday spoken Vietnamese as people speak it in Saigon, with correct diacritics. No slang unless the speaker uses slang.',
+    '- Pronouns: ' + pronounRule(),
+    '- The transcript may contain recognition errors, miss punctuation or stop mid-sentence: use the recent conversation to understand it, but translate only the new text.',
+    '- Keep names of people, places and brands unchanged' + (vocab.length ? ' (for example: ' + vocab.join(', ') + ')' : '') + '.',
+    '- Parts already in Vietnamese are the listeners answering: leave them out. If nothing is left to translate (only Vietnamese, or only hesitation sounds such as um, uh, hmm), answer exactly: -',
+    '- Answer with the Vietnamese translation only: no quotes, labels, notes or alternatives.'
+  ].join('\n');
+}
+
+function userPrompt(context, text) {
+  const thread = context.map((c) => 'Speaker: ' + c.en + '\nVietnamese: ' + c.vi).join('\n');
+  return (thread ? 'Recent conversation (context only, do not translate it again):\n' + thread + '\n\n' : '') +
+    'Translate into Vietnamese:\n' + text;
+}
+
+/** Consigne de Qwen-MT (« domains ») : il ne prend ni message système ni fil de conversation. */
+function mtDomain() {
+  const vocab = vocabList();
+  return 'Live spoken conversation with Vietnamese people in Ho Chi Minh City, translated sentence by sentence for them to read: natural, everyday spoken Vietnamese. Pronouns: ' +
+    pronounRule() + (vocab.length ? ' Keep these names unchanged: ' + vocab.join(', ') + '.' : '');
+}
+
+function translateBody(model, text, context) {
+  if (model.mt) {
+    return {
+      model: model.id,
+      input: { messages: [{ role: 'user', content: text }] },
+      parameters: {
+        result_format: 'message',
+        translation_options: { source_lang: S.lang === 'en' ? 'English' : 'auto', target_lang: 'Vietnamese', domains: mtDomain() }
+      }
+    };
+  }
+  return {
+    model: model.id,
+    input: {
+      messages: [
+        { role: 'system', content: [{ text: systemPrompt() }] },
+        { role: 'user', content: [{ text: userPrompt(context, text) }] }
+      ]
+    },
+    parameters: { result_format: 'message', enable_thinking: false, temperature: 0.3, max_tokens: 600 }
+  };
+}
+
+/** Traduit `text` ; passe au modèle de secours si celui-ci n'existe pas pour ce compte. */
+async function translateText(text, context) {
+  for (;;) {
+    const model = activeModel();
+    try {
+      const json = await withRetry(() => qwenPost(model.api, translateBody(model, text, context), 12000));
+      trState.used = model.id;
+      return cleanVi(contentText(json));
+    } catch (e) {
+      const chain = [S.model].concat(chosenModel().fallback || []);
+      if (isModelError(e) && chain.some((id) => id !== model.id && !trState.dead.has(id))) {
+        trState.dead.add(model.id);
+        trState.note = modelName(model.id) + ' indisponible (' + shortError(e) + ') : remplacé par ' + modelName(activeModel().id);
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+function cleanVi(text) {
+  return String(text || '')
+    .replace(/^\s*```[a-z]*\s*|\s*```\s*$/gi, '')
+    .replace(/^\s*(VI|Vietnamese|Tiếng Việt|Bản dịch)\s*[:：]\s*/i, '')
+    .replace(/\s*\n+\s*/g, ' ')
+    .replace(/^["“«]\s*|\s*["”»]$/g, '')
+    .trim();
+}
+
+/** Seulement des hésitations (« uh », « um », « hmm », « euh »…) ou rien. */
+function isFiller(text) {
+  const words = String(text || '').toLowerCase().replace(/[^\p{L}\s']/gu, ' ').split(/\s+/).filter(Boolean);
+  return words.every((w) => /^(u+h+|u+m+|h+m+|m+h*m+|a+h+|e+r+m*|o+h+|hu+h|e+h+|eu+h+)$/.test(w));
+}
+
+// Lettres propres au vietnamien (â, ê, ô, à… existent aussi en français).
+const VIET_ONLY = /[áảãạăằắẳẵặấầẩẫậđẻẽẹếềểễệìíỉĩịòóỏõọốồổỗộơờớởỡợúủũụưừứửữựỳýỷỹỵ]/i;
+/**
+ * Réplique entièrement en vietnamien (la personne en face qui répond) : la moitié des mots au
+ * moins portent un accent vietnamien. Une phrase mêlée part à la traduction, qui laisse de côté
+ * les morceaux déjà en vietnamien.
+ */
+function isVietnamese(text, lang) {
+  if (lang && lang !== 'vi') return false;
+  const words = String(text || '').split(/\s+/).filter((w) => /\p{L}/u.test(w));
+  return words.length > 0 && words.filter((w) => VIET_ONLY.test(w)).length / words.length >= 0.5;
+}
+
+// ─── Interface ───────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const feed = $('feed');
+const linesEl = $('lines');
+const emptyEl = $('empty');
+const micBtn = $('micBtn');
+const hint = $('hint');
+const statusText = $('statusText');
+const dot = $('dot');
+const clearBtn = $('clearBtn');
+const livePill = $('livePill');
+const banner = $('banner');
+const sheet = $('sheet');
+
+const lines = [];
+let lineSeq = 0;
+let listening = false;
+let starting = false;
+let inFlight = 0;
+let follow = true;
+let micName = '';
+let micBusy = false;
+
+document.body.classList.toggle('big', S.big);
+
+function showBanner(text) {
+  $('bannerText').textContent = text;
+  banner.hidden = false;
+}
+function hideBanner() { banner.hidden = true; }
+$('bannerClose').addEventListener('click', hideBanner);
+
+function updateStatus() {
+  let text;
+  if (listening) text = (micBusy ? 'Micro occupé' : (micName || 'Micro')) + (inFlight ? ' · ' + inFlight + ' en cours' : '');
+  else text = starting ? 'Démarrage…' : 'En pause';
+  statusText.textContent = text;
+  dot.classList.toggle('on', listening && !micBusy);
+  micBtn.classList.toggle('on', listening);
+  micBtn.setAttribute('aria-label', listening ? "Arrêter l'écoute" : 'Écouter');
+  micBtn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+  hint.textContent = listening ? 'En écoute · toucher pour arrêter' : (starting ? 'Démarrage du micro…' : 'Toucher pour écouter');
+  clearBtn.disabled = !linesEl.children.length;
+  emptyEl.hidden = linesEl.children.length > 0;
+}
+
+function setLevel(v) {
+  micBtn.style.setProperty('--lvl', listening ? v.toFixed(3) : '0');
+}
+
+// Lignes : rendu groupé à chaque image, seuls les nœuds modifiés sont touchés.
+const dirty = new Set();
+let rafId = 0;
+function render(line) {
+  dirty.add(line);
+  if (!rafId) rafId = requestAnimationFrame(flushRender);
+}
+function flushRender() {
+  rafId = 0;
+  dirty.forEach(paint);
+  dirty.clear();
+  if (follow) toBottom();
+}
+
+function mountLine(line) {
+  const el = document.createElement('article');
+  const tr = document.createElement('p');
+  tr.className = 'tr';
+  tr.lang = 'vi';
+  const err = document.createElement('div');
+  err.className = 'err';
+  const errText = document.createElement('p');
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'retry';
+  retry.textContent = 'Réessayer';
+  retry.addEventListener('click', () => retryLine(line));
+  err.append(errText, retry);
+  const src = document.createElement('p');
+  src.className = 'src';
+  src.lang = 'en';
+  el.append(tr, err, src);
+  line.el = el;
+  line.parts = { tr, err, errText, src };
+  linesEl.appendChild(el);
+  paint(line);
+  updateStatus();
+  if (follow) toBottom();
+}
+
+function paint(line) {
+  if (!line.el) return;
+  const p = line.parts;
+  line.el.className = 'line is-' + line.status;
+  const failed = line.status === 'failed';
+  p.err.hidden = !failed;
+  p.tr.hidden = failed;
+  if (failed) p.errText.textContent = line.error;
+  if (line.status === 'done') {
+    p.tr.textContent = line.vi;
+    p.tr.classList.remove('wait');
+  } else if (!failed) {
+    p.tr.textContent = line.status === 'asr' ? 'Transcription' : 'Traduction';
+    p.tr.classList.add('wait');
+  }
+  // L'anglais : toujours visible sur une ligne en échec, pour savoir ce qui n'est pas passé.
+  const showSrc = !!line.en && (S.showEn || failed);
+  p.src.hidden = !showSrc;
+  if (showSrc) {
+    p.src.textContent = line.en;
+    p.src.lang = line.lang && /^[a-z]{2}$/.test(line.lang) ? line.lang : 'en';
+  }
+}
+
+function addNote(text) {
+  const note = document.createElement('p');
+  note.className = 'note-line';
+  note.textContent = text;
+  linesEl.appendChild(note);
+  updateStatus();
+  if (follow) toBottom();
+}
+
+function toBottom() { feed.scrollTop = feed.scrollHeight; }
+
+feed.addEventListener('scroll', () => {
+  const atBottom = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 60;
+  if (atBottom !== follow) {
+    follow = atBottom;
+    livePill.hidden = follow;
+  }
+}, { passive: true });
+
+livePill.addEventListener('click', () => {
+  follow = true;
+  livePill.hidden = true;
+  feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+});
+
+// Effacer : un deuxième appui confirme (dans les 3 secondes).
+let clearArmed = 0;
+clearBtn.addEventListener('click', () => {
+  if (clearArmed) {
+    clearTimeout(clearArmed);
+    clearArmed = 0;
+    clearBtn.classList.remove('armed');
+    clearAll();
+    return;
+  }
+  clearBtn.classList.add('armed');
+  clearArmed = setTimeout(() => { clearArmed = 0; clearBtn.classList.remove('armed'); }, 3000);
+});
+
+function clearAll() {
+  for (const line of lines) { line.dead = true; line.el = null; }
+  lines.length = 0;
+  linesEl.textContent = '';
+  follow = true;
+  livePill.hidden = true;
+  updateStatus();
+}
+
+function removeLine(line) {
+  line.dead = true;
+  const i = lines.indexOf(line);
+  if (i >= 0) lines.splice(i, 1);
+  if (line.el) line.el.remove();
+  line.el = null;
+  updateStatus();
+}
+
+function failLine(line, err, autoRetry) {
+  Object.assign(line, { status: 'failed', error: typeof err === 'string' ? err : errorMessage(err), autoRetry: !!autoRetry });
+  render(line);
+}
+
+// ─── Phrases ─────────────────────────────────────────────────────────────────
+// L'app découpe la parole en phrases, bout à bout, sans trou : à chaque vraie pause (fenêtres de
+// Turns, réglettes « Découpage »). Chaque phrase part en entier dans sa propre requête : rien
+// n'est perdu entre deux, et les phrases avancent toutes en même temps, sans s'attendre.
+const pw = { start: 0 };   // début de la phrase en cours (position en échantillons)
+
+/** Fin de phrase repérée par Turns (pause, phrase trop longue, arrêt de l'écoute). */
+function phraseCut(c) {
+  const from = pw.start;
+  pw.start = c.at;
+  if (c.speech && c.last > from + 0.2 * RATE) phraseEmit(from, c.at, c.why || 'pause');
+}
+
+function phraseEmit(a, b, why) {
+  const first = ringFirstVoiced(a, b);
+  if (first < 0) return;                       // aucune parole
+  if (first - a > 3 * RATE) a = first - RATE;  // long silence au début : on garde 1 s avant le premier mot
+  const samples = ringAudio(a, b);
+  if (!samples || samples.length < 0.3 * RATE) return;
+  const sec = samples.length / RATE;
+  const line = {
+    id: ++lineSeq, createdAt: Date.now(), audio: toBase64(encodeWAV(samples, RATE)), sec,
+    voiced: ringVoiced(a, b) * sec, en: '', vi: '', lang: '', status: 'asr', error: '', autoRetry: false
+  };
+  journalAdd(line, why);
+  lines.push(line);
+  mountLine(line);
+  transcribeLine(line);
+}
+
+async function transcribeLine(line) {
+  if (line.dead || line.busy || !line.audio) return;
+  if (!S.apiKey) { failLine(line, 'Ajoutez votre clé API Qwen dans les réglages.', false); return; }
+  line.busy = true;
+  Object.assign(line, { status: 'asr', error: '', autoRetry: false });
+  render(line);
+  inFlight++;
+  updateStatus();
+  const t0 = performance.now();
+  let next = false;
+  try {
+    const r = await transcribe(line.audio, line.sec);
+    tech.asr = performance.now() - t0;
+    Object.assign(line.log, { asr: tech.asr, words: wordCount(r.text), lang: r.lang, error: '' });
+    if (line.dead) return;
+    if (!r.text || isNoiseOnly(r.text) || isFiller(r.text)) {
+      line.log.drop = r.text ? 'hésitation' : 'rien entendu';
+      removeLine(line);
+    } else if (S.lang !== 'en' && isVietnamese(r.text, r.lang)) {
+      line.log.drop = 'réponse en vietnamien, laissée de côté';
+      removeLine(line);
+    } else {
+      Object.assign(line, { en: r.text, lang: r.lang, audio: null });
+      next = true;
+    }
+    retryFailed();
+  } catch (err) {
+    line.log.error = 'transcription : ' + shortError(err);
+    if (!line.dead) failLine(line, err, isTransient(err) || isKeyError(err) || isAccountError(err));
+    if (isKeyError(err) || isAccountError(err)) showBanner(errorMessage(err));
+  } finally {
+    line.busy = false;
+    inFlight--;
+    updateStatus();
+    if (!sheet.hidden) renderTech();
+  }
+  if (next) translateLine(line);
+}
+
+/** Le fil de la conversation : les phrases déjà traduites des 3 dernières minutes, avec les mêmes pronoms. */
+function recentContext(line) {
+  const index = lines.indexOf(line);
+  const cutoff = line.createdAt - 180000;
+  const out = [];
+  for (let k = index - 1; k >= 0 && out.length < 6; k--) {
+    const prev = lines[k];
+    if (prev.createdAt < cutoff) break;
+    if (prev.dead || prev.status !== 'done' || !prev.en || prev.pron !== line.pron) continue;
+    out.unshift({ en: prev.en, vi: prev.vi });
+  }
+  return out;
+}
+
+async function translateLine(line) {
+  if (line.dead || line.busy || !line.en) return;
+  if (!S.apiKey) { failLine(line, 'Ajoutez votre clé API Qwen dans les réglages.', false); return; }
+  line.busy = true;
+  Object.assign(line, { status: 'tr', error: '', autoRetry: false, pron: pronounKey() });
+  render(line);
+  inFlight++;
+  updateStatus();
+  const t0 = performance.now();
+  try {
+    const vi = await translateText(line.en, recentContext(line));
+    tech.tr = performance.now() - t0;
+    Object.assign(line.log, { tr: tech.tr, model: trState.used, error: '' });
+    if (line.dead) return;
+    if (!vi || vi === '-' || isNoiseOnly(vi)) {
+      line.log.drop = 'rien à traduire';
+      removeLine(line);
+    } else {
+      Object.assign(line, { vi, status: 'done' });
+      render(line);
+    }
+    retryFailed();
+  } catch (err) {
+    line.log.error = 'traduction : ' + shortError(err);
+    if (!line.dead) failLine(line, err, isTransient(err) || isKeyError(err) || isAccountError(err));
+    if (isKeyError(err) || isAccountError(err)) showBanner(errorMessage(err));
+  } finally {
+    line.busy = false;
+    inFlight--;
+    updateStatus();
+    if (!sheet.hidden) renderTech();
+  }
+}
+
+function retryLine(line) {
+  if (line.status !== 'failed' || line.busy || line.dead) return;
+  if (line.en) translateLine(line);
+  else transcribeLine(line);
+}
+
+/** Un appel a réussi, ou le réseau est revenu : on relance les phrases restées en échec. */
+function retryFailed() {
+  for (const line of lines) if (line.status === 'failed' && line.autoRetry) retryLine(line);
+}
+window.addEventListener('online', retryFailed);
+
+// ─── Journal des dernières phrases (Réglages › Infos techniques) ─────────────
+// Pour comprendre en situation réelle ce qui ralentit ou ce qui manque : durée, parole entendue,
+// raison de la coupure, temps de transcription et de traduction, erreur. Rien n'en sort de l'appareil.
+const journal = [];
+function journalAdd(line, why) {
+  line.log = { t: new Date(), sec: line.sec, voiced: line.voiced, why, asr: null, words: null, lang: '', tr: null, model: '', drop: '', error: '' };
+  journal.push(line.log);
+  if (journal.length > 30) journal.shift();
+}
+
+function wordCount(text) {
+  const t = String(text || '').trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
+// ─── Mémoire audio ───────────────────────────────────────────────────────────
+// Les 90 dernières secondes envoyées par le micro (PCM 16 kHz, après gain automatique) et la
+// décision parole / silence de chaque trame de 20 ms. Positions en échantillons depuis le début.
+const ring = { chunks: [], pos: 0, vad: [] };
+function ringPush(chunk) {
+  ring.chunks.push(chunk);
+  while (ring.chunks.length && chunk.end - ring.chunks[0].end > 90 * RATE) ring.chunks.shift();
+  ring.pos = chunk.end;
+  const v = chunk.vad;
+  if (v && v.length) {
+    for (let i = 0; i < v.length; i++) ring.vad.push({ e: chunk.vadEnd - (v.length - 1 - i) * 320, v: v[i] });
+    while (ring.vad.length && chunk.vadEnd - ring.vad[0].e > 90 * RATE) ring.vad.shift();
+  }
+}
+function ringReset() { ring.chunks = []; ring.pos = 0; ring.vad = []; }
+/** Échantillons [a, b) encore en mémoire, ou null. */
+function ringAudio(a, b) {
+  a = Math.max(0, Math.round(a));
+  b = Math.min(ring.pos, Math.round(b));
+  if (b <= a) return null;
+  const out = new Float32Array(b - a);
+  let filled = 0;
+  for (const c of ring.chunks) {
+    const cs = c.end - c.data.length;
+    if (c.end <= a || cs >= b) continue;
+    const from = Math.max(a, cs), to = Math.min(b, c.end);
+    for (let i = from; i < to; i++) out[i - a] = c.data[i - cs] / 32768;
+    filled += to - from;
+  }
+  return filled ? out : null;
+}
+/** Part des trames de parole entre a et b. */
+function ringVoiced(a, b) {
+  let n = 0, voiced = 0;
+  for (let i = ring.vad.length - 1; i >= 0; i--) {
+    const f = ring.vad[i];
+    if (f.e <= a) break;
+    if (f.e <= b) { n++; voiced += f.v; }
+  }
+  return n ? voiced / n : 0;
+}
+/** Début de la première trame de parole entre a et b, ou -1. */
+function ringFirstVoiced(a, b) {
+  for (const f of ring.vad) if (f.e > a && f.e <= b && f.v) return f.e - 320;
+  return -1;
+}
+
+// ─── Micro ───────────────────────────────────────────────────────────────────
+const WORKLET_SOURCE = [
+  Resampler.toString(),
+  Segmenter.toString(),
+  Agc.toString(),
+  Turns.toString(),
+  Capture.toString(),
+  `class AVCapture extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    const o = (options && options.processorOptions) || {};
+    const port = this.port;
+    this.rs = new Resampler(sampleRate, 16000);
+    this.cap = new Capture(o, function (m, transfer) { port.postMessage(m, transfer || []); });
+    port.onmessage = (e) => this.cap.command(e.data || {});
+  }
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input.length) this.cap.process(this.rs.process(input[0]));
+    return true;
+  }
+}
+registerProcessor('av-capture', AVCapture);`
+].join('\n');
+
+// Découpage (réglettes) : une phrase part après `pause` secondes de silence ; un long monologue
+// part à la première petite pause passé `maxLen` secondes de parole, au plus tard au double.
+function currentTurns() {
+  return { endSilence: S.pause, softMax: S.maxLen, softPause: Math.min(0.25, S.pause / 2), hardMax: 2 * S.maxLen };
+}
+
+/** Commande pour la chaîne du micro, qu'elle tourne dans l'AudioWorklet ou en secours. */
+function capCommand(m) {
+  if (cap.node) cap.node.port.postMessage(m);
+  else if (cap.feed) cap.feed.command(m);
+}
+
+/** Nouveau découpage pendant l'écoute : il vaut tout de suite, phrase en cours comprise. */
+function applyTuning() {
+  if (listening) capCommand({ type: 'tune', turns: currentTurns() });
+}
+
+const cap = { ctx: null, stream: null, src: null, node: null, sp: null, feed: null, sink: null, url: '', lastAudio: 0, failures: 0 };
+const flushWaiters = new Map();
+let flushSeq = 0;
+let recovering = false;
+let hiddenAt = 0;
+let heardWhileHidden = false;
+let mutedSince = 0;
+
+function onCapture(msg) {
+  cap.lastAudio = performance.now();
+  if (document.hidden) heardWhileHidden = true;
+  if (msg.type === 'level') { setLevel(msg.v); tech.gain = msg.gain; }
+  else if (msg.type === 'pcm') ringPush(msg);
+  else if (msg.type === 'cut') phraseCut(msg);
+  else if (msg.type === 'flushed') {
+    const done = flushWaiters.get(msg.id);
+    flushWaiters.delete(msg.id);
+    if (done) done();
+  }
+}
+
+const getMic = (audio) => navigator.mediaDevices.getUserMedia({ audio, video: false });
+
+async function openStream() {
+  const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+  let stream = null;
+  if (S.micId) {
+    try { stream = await getMic(Object.assign({}, base, { deviceId: { exact: S.micId } })); } catch (e) {
+      if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;
+    }
+  }
+  if (!stream) stream = await getMic(base);
+  // Les identifiants de micro changent d'une session à l'autre : on retrouve le choix par son nom.
+  const track = stream.getAudioTracks()[0];
+  if (S.micLabel && track && track.label !== S.micLabel) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const wanted = devices.find((d) => d.kind === 'audioinput' && d.label === S.micLabel);
+      if (wanted) {
+        const again = await getMic(Object.assign({}, base, { deviceId: { exact: wanted.deviceId } }));
+        stream.getTracks().forEach((t) => t.stop());
+        stream = again;
+        save('micId', wanted.deviceId);
+      }
+    } catch (e) { /* on garde le micro par défaut */ }
+  }
+  return stream;
+}
+
+async function buildGraph(ctx) {
+  cap.sink = ctx.createGain();
+  cap.sink.gain.value = 0;
+  cap.sink.connect(ctx.destination);
+  if (ctx.audioWorklet && typeof AudioWorkletNode !== 'undefined' && !FORCE_SCRIPT_PROCESSOR) {
+    try {
+      if (!cap.url) cap.url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
+      await ctx.audioWorklet.addModule(cap.url);
+      const node = new AudioWorkletNode(ctx, 'av-capture', {
+        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+        channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers',
+        processorOptions: { turns: currentTurns(), stream: true }
+      });
+      node.port.onmessage = (e) => onCapture(e.data);
+      node.connect(cap.sink);
+      cap.node = node;
+      tech.mode = 'AudioWorklet';
+    } catch (e) {
+      cap.node = null;
+    }
+  }
+  if (!cap.node) {
+    // Secours : même traitement, sur le thread principal.
+    const sp = ctx.createScriptProcessor(2048, 1, 1);
+    const rs = new Resampler(ctx.sampleRate, 16000);
+    const feedCap = new Capture({ turns: currentTurns(), stream: true }, (m) => onCapture(m));
+    cap.feed = feedCap;
+    sp.onaudioprocess = (e) => {
+      if (cap.feed === feedCap) feedCap.process(rs.process(e.inputBuffer.getChannelData(0)));
+    };
+    sp.connect(cap.sink);
+    cap.sp = sp;
+    tech.mode = 'ScriptProcessor';
+  }
+  tech.rate = ctx.sampleRate;
+}
+
+function attachStream(stream) {
+  cap.stream = stream;
+  cap.src = cap.ctx.createMediaStreamSource(stream);
+  cap.src.connect(cap.node || cap.sp);
+  const track = stream.getAudioTracks()[0];
+  micName = shortMicName(track && track.label);
+  mutedSince = track && track.muted ? performance.now() : 0;
+  micBusy = false;
+  if (track) {
+    track.onended = () => { if (listening) recover(); };
+    track.onmute = () => { mutedSince = performance.now(); };
+    track.onunmute = () => { mutedSince = 0; micBusy = false; updateStatus(); };
+  }
+}
+
+function shortMicName(label) {
+  if (!label) return 'Micro';
+  const clean = label.replace(/^(Default|Par défaut)\s*-\s*/i, '').replace(/\s*\([^)]*\)\s*$/, '');
+  return clean.length > 30 ? clean.slice(0, 29) + '…' : clean;
+}
+
+function micError(e) {
+  const name = e && e.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return "Le micro est bloqué pour ce site. Autorisez-le (Safari : menu de la page › Réglages du site web › Micro, ou Réglages iOS › Apps › Safari › Micro), puis réessayez.";
+  }
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Aucun micro trouvé.';
+  if (name === 'NotReadableError' || name === 'AbortError') return 'Le micro est utilisé par une autre app (appel en cours ?). Réessayez.';
+  return 'Impossible de démarrer le micro : ' + ((e && (e.message || e.name)) || 'erreur inconnue');
+}
+
+/** Rend la phrase en cours ; attend l'accusé du micro. */
+function flushCapture() {
+  return new Promise((resolve) => {
+    if (!cap.node && !cap.feed) { resolve(); return; }
+    const id = ++flushSeq;
+    flushWaiters.set(id, resolve);
+    capCommand({ type: 'flush', id });
+    setTimeout(() => { if (flushWaiters.delete(id)) resolve(); }, 400);
+  });
+}
+
+/** Ouvre la connexion vers Qwen avant la première phrase (rien n'est envoyé). */
+let warmedAt = 0;
+function warmUp() {
+  const base = apiBase();
+  if (!base || Date.now() - warmedAt < 60000) return;
+  warmedAt = Date.now();
+  const link = document.createElement('link');
+  link.rel = 'preconnect';
+  link.href = base;
+  link.crossOrigin = 'anonymous';   // même type de connexion que les appels (sans cookies)
+  document.head.appendChild(link);
+  setTimeout(() => link.remove(), 30000);
+}
+
+async function startListening() {
+  if (listening || starting) return;
+  if (!S.apiKey) { openSettings(true); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showBanner(window.isSecureContext ? "Ce navigateur ne donne pas accès au micro." : "Le micro n'est accessible que sur une page sécurisée (https).");
+    return;
+  }
+  starting = true;
+  ringReset();
+  pw.start = 0;
+  updateStatus();
+  lockScreen();   // demandé pendant le toucher : Safari l'accorde plus volontiers
+  // L'AudioContext doit naître pendant le toucher (règle de Safari), avant toute attente.
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ctx;
+  try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+  cap.ctx = ctx;
+  const resumed = ctx.resume().catch(() => {});
+  warmUp();
+  try {
+    const stream = await openStream();
+    await resumed;
+    await buildGraph(ctx);
+    attachStream(stream);
+    if (ctx.state !== 'running') await ctx.resume().catch(() => {});
+    ctx.onstatechange = () => { if (listening && !document.hidden && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {}); };
+    listening = true;
+    cap.lastAudio = performance.now();
+    cap.failures = 0;
+    hideBanner();
+    lockScreen();
+  } catch (e) {
+    try { ctx.close(); } catch (x) { /* déjà fermé */ }
+    Object.assign(cap, { ctx: null, node: null, sp: null, feed: null, sink: null, src: null, stream: null });
+    unlockScreen();
+    showBanner(micError(e));
+  } finally {
+    starting = false;
+    updateStatus();
+  }
+}
+
+async function stopListening() {
+  if (!listening) return;
+  listening = false;
+  micBusy = false;
+  setLevel(0);
+  updateStatus();
+  unlockScreen();
+  await flushCapture().catch(() => {});
+  try { if (cap.src) cap.src.disconnect(); } catch (e) { /* déjà déconnecté */ }
+  if (cap.stream) cap.stream.getTracks().forEach((t) => t.stop());
+  try { if (cap.node) cap.node.port.onmessage = null; } catch (e) { /* rien */ }
+  try { if (cap.ctx) await cap.ctx.close(); } catch (e) { /* déjà fermé */ }
+  Object.assign(cap, { ctx: null, node: null, sp: null, feed: null, sink: null, src: null, stream: null });
+  updateStatus();
+}
+
+/** Le micro s'est arrêté (iOS, autre app, changement de micro) : on le rouvre. */
+async function recover() {
+  if (recovering || !listening || !cap.ctx) return;
+  recovering = true;
+  try {
+    try { if (cap.src) cap.src.disconnect(); } catch (e) { /* rien */ }
+    if (cap.stream) cap.stream.getTracks().forEach((t) => t.stop());
+    const stream = await openStream();
+    if (!listening || !cap.ctx) { stream.getTracks().forEach((t) => t.stop()); return; }
+    attachStream(stream);
+    if (cap.ctx.state !== 'running') await cap.ctx.resume().catch(() => {});
+    cap.lastAudio = performance.now();
+    cap.failures = 0;
+    updateStatus();
+  } catch (e) {
+    cap.failures++;
+    if (cap.failures >= 3 || (e && e.name === 'NotAllowedError')) {
+      await stopListening();
+      showBanner(micError(e));
+    }
+  } finally {
+    recovering = false;
+  }
+}
+
+// Surveillance : relance le micro s'il ne livre plus rien (interruption iOS, appel, Siri…).
+setInterval(() => {
+  if (!listening || document.hidden || recovering || !cap.ctx) return;
+  if (cap.ctx.state !== 'running') {
+    cap.ctx.resume().catch(() => {});
+    if (performance.now() - cap.lastAudio > 4000) showBanner("L'écoute est en pause : touchez l'écran pour la reprendre.");
+    return;
+  }
+  const track = cap.stream && cap.stream.getAudioTracks()[0];
+  if (track && track.muted && mutedSince) {
+    if (!micBusy) { micBusy = true; updateStatus(); }
+    if (performance.now() - mutedSince > 4000) { mutedSince = performance.now(); recover(); }
+    return;
+  }
+  if (!track || track.readyState === 'ended' || performance.now() - cap.lastAudio > 3000) recover();
+}, 1000);
+
+// Un toucher n'importe où relance l'audio si Safari l'a suspendu.
+document.addEventListener('pointerdown', () => {
+  if (listening && !wakeLock) lockScreen();
+  if (listening && cap.ctx && cap.ctx.state !== 'running') {
+    cap.ctx.resume().then(() => { if (cap.ctx && cap.ctx.state === 'running') hideBanner(); }).catch(() => {});
+  }
+}, true);
+
+document.addEventListener('visibilitychange', () => {
+  if (!listening) return;
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    heardWhileHidden = false;
+    flushCapture();
+    return;
+  }
+  lockScreen();
+  if (cap.ctx && cap.ctx.state !== 'running') cap.ctx.resume().catch(() => {});
+  cap.lastAudio = performance.now();
+  if (hiddenAt) {
+    const gap = (Date.now() - hiddenAt) / 1000;
+    hiddenAt = 0;
+    // Sur iPhone le micro s'arrête quand la page passe en arrière-plan ; ailleurs il continue.
+    if (gap >= 2 && !heardWhileHidden) addNote('Écoute coupée pendant ' + formatGap(gap) + ' (écran verrouillé ou autre app)');
+    warmUp();
+  }
+});
+
+function formatGap(sec) {
+  if (sec < 60) return Math.round(sec) + ' s';
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return m + ' min' + (s ? ' ' + s + ' s' : '');
+}
+
+// Écran toujours allumé pendant l'écoute (Safari arrête le micro quand l'écran se verrouille).
+let wakeLock = null;
+async function lockScreen() {
+  if (!('wakeLock' in navigator) || wakeLock || document.hidden) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) { wakeLock = null; }
+}
+function unlockScreen() {
+  try { if (wakeLock) wakeLock.release(); } catch (e) { /* déjà libéré */ }
+  wakeLock = null;
+}
+
+micBtn.addEventListener('click', () => {
+  if (listening) stopListening();
+  else startListening();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || !sheet.hidden || e.target.closest('input, select, textarea, button, a')) return;
+  e.preventDefault();
+  micBtn.click();
+});
+
+// ─── Réglages ────────────────────────────────────────────────────────────────
+const keyInput = $('keyInput');
+const keyStatus = $('keyStatus');
+const customInput = $('customInput');
+
+function openSettings(welcome) {
+  $('welcome').hidden = !welcome;
+  keyInput.value = S.apiKey;
+  setKeyStatus('', '');
+  renderChoices('regionChoices', 'region', REGIONS, S.region, onRegion);
+  renderCustom();
+  renderChoices('modelChoices', 'model', MODELS, S.model, (id) => { save('model', id); trState.dead.clear(); trState.note = ''; });
+  renderSelect('langSelect', LANGS, S.lang);
+  showLangSub();
+  $('vocabInput').value = S.vocab;
+  renderCuts();
+  $('enToggle').checked = S.showEn;
+  $('bigToggle').checked = S.big;
+  fillMics();
+  renderTech();
+  sheet.hidden = false;
+  document.body.classList.add('sheet-open');
+  if (welcome) setTimeout(() => keyInput.focus(), 60);
+}
+
+function closeSettings() {
+  const key = keyInput.value.trim();
+  if (key && key !== S.apiKey) saveKey(key, false);
+  sheet.hidden = true;
+  document.body.classList.remove('sheet-open');
+}
+
+$('settingsBtn').addEventListener('click', () => openSettings(false));
+$('sheetDone').addEventListener('click', closeSettings);
+sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSettings(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheet.hidden) closeSettings(); });
+
+function setKeyStatus(text, kind) {
+  keyStatus.textContent = text;
+  keyStatus.className = 'key-status' + (kind ? ' ' + kind : '');
+}
+
+// Vérification de la clé : une transcription d'un court silence et une traduction d'une phrase,
+// en même temps. Elle teste aussi que le serveur répond bien à une page web.
+const SILENCE = toBase64(encodeWAV(new Float32Array(RATE / 2), RATE));
+const PROBE_TEXT = 'Hello, nice to meet you.';
+
+async function probe() {
+  const t0 = performance.now();
+  const [a, t] = await Promise.allSettled([
+    transcribe(SILENCE, 0.5).then(() => performance.now() - t0),
+    translateText(PROBE_TEXT, []).then((vi) => ({ ms: performance.now() - t0, vi }))
+  ]);
+  if (a.status === 'fulfilled' && t.status === 'fulfilled') return { ok: true, asrMs: a.value, trMs: t.value.ms, sample: t.value.vi };
+  return { ok: false, asrErr: a.status === 'rejected' ? a.reason : null, trErr: t.status === 'rejected' ? t.reason : null };
+}
+
+function probeMessage(r) {
+  const e = r.trErr || r.asrErr;
+  if (isKeyError(e)) return "Clé refusée par Qwen. Vérifiez qu'elle est copiée en entier et qu'elle vient de la région choisie dans « Serveur Qwen ».";
+  if (e && e.kind === 'network' && navigator.onLine !== false) {
+    return "Qwen ne répond pas depuis cette page. Si internet marche, c'est que ce serveur refuse les appels venant d'une page web : essayez l'autre serveur, ou une adresse de relais (Serveur Qwen › Autre adresse).";
+  }
+  if (r.asrErr && !r.trErr) return 'La traduction marche, mais pas la transcription : ' + errorMessage(r.asrErr);
+  if (r.trErr && !r.asrErr) return 'La transcription marche, mais pas la traduction : ' + errorMessage(r.trErr);
+  return errorMessage(e);
+}
+
+async function saveKey(key, showResult) {
+  save('apiKey', key);
+  trState.dead.clear();
+  trState.note = '';
+  if (showResult) setKeyStatus('Vérification…', 'busy');
+  const r = await probe();
+  tech.probe = r;
+  if (r.ok) {
+    if (showResult) {
+      setKeyStatus('✓ Clé valide · transcription ' + seconds(r.asrMs) + ' · traduction ' + seconds(r.trMs) +
+        (r.sample ? ' · « ' + PROBE_TEXT + ' » → « ' + r.sample + ' »' : ''), 'ok');
+    }
+    hideBanner();
+    retryFailed();
+  } else {
+    const msg = probeMessage(r);
+    if (showResult) setKeyStatus(msg, 'bad');
+    else showBanner(msg);
+  }
+  if (!sheet.hidden) renderTech();
+}
+
+$('checkBtn').addEventListener('click', () => {
+  const key = keyInput.value.trim();
+  if (!key) { setKeyStatus("Collez d'abord la clé.", 'bad'); keyInput.focus(); return; }
+  saveKey(key, true);
+});
+
+$('pasteBtn').addEventListener('click', async () => {
+  try {
+    const text = (await navigator.clipboard.readText()).trim();
+    if (text) {
+      keyInput.value = text;
+      setKeyStatus('', '');
+    }
+  } catch (e) {
+    keyInput.focus();
+    setKeyStatus('Appuyez longuement dans le champ puis « Coller ».', '');
+  }
+});
+
+/** Choix à boutons radio (serveur, modèle). */
+function renderChoices(boxId, name, items, current, onPick) {
+  const box = $(boxId);
+  box.textContent = '';
+  for (const item of items) {
+    const label = document.createElement('label');
+    label.className = 'choice';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = item.id;
+    input.checked = item.id === current;
+    input.addEventListener('change', () => onPick(item.id));
+    const text = document.createElement('span');
+    const title = document.createElement('b');
+    title.textContent = item.title;
+    const sub = document.createElement('small');
+    sub.textContent = item.sub;
+    text.append(title, sub);
+    label.append(input, text);
+    box.appendChild(label);
+  }
+}
+
+function renderSelect(id, items, current) {
+  const select = $(id);
+  select.textContent = '';
+  for (const item of items) {
+    const o = document.createElement('option');
+    o.value = item.id;
+    o.textContent = item.label;
+    select.appendChild(o);
+  }
+  select.value = current;
+}
+
+function onRegion(id) {
+  save('region', id);
+  trState.dead.clear();
+  trState.note = '';
+  warmedAt = 0;
+  renderCustom();
+}
+
+function renderCustom() {
+  const custom = S.region === 'custom';
+  customInput.hidden = !custom;
+  $('customNote').hidden = !custom;
+  if (custom) customInput.value = S.customBase;
+}
+
+customInput.addEventListener('change', () => {
+  const clean = cleanBase(customInput.value);
+  save('customBase', clean || customInput.value.trim());
+  $('customNote').textContent = clean ? 'Appels envoyés à ' + clean + '.'
+    : "Adresse refusée : seuls les domaines …aliyuncs.com (Model Studio) et ….workers.dev (relais) sont autorisés.";
+});
+
+// Pronoms : de part et d'autre du micro, et dans Réglages › Traduction. Choisir « tu » met le
+// « je » qui va avec ; changer « je » ne touche pas à « tu ». Ils valent dès la phrase suivante.
+const jeSelects = [$('jeChip'), $('jeSelect')];
+const tuSelects = [$('tuChip'), $('tuSelect')];
+function fillSelect(select, items, current, short) {
+  select.textContent = '';
+  for (const item of items) {
+    const o = document.createElement('option');
+    o.value = item.id;
+    o.textContent = short ? item.id : item.label;
+    select.appendChild(o);
+  }
+  select.value = current;
+}
+function renderPronouns() {
+  jeSelects.forEach((el, i) => fillSelect(el, JE, S.je, i === 0));
+  tuSelects.forEach((el, i) => fillSelect(el, TU, S.tu, i === 0));
+}
+function setPronouns(je, tu) {
+  save('je', je);
+  save('tu', tu);
+  jeSelects.forEach((el) => { el.value = je; });
+  tuSelects.forEach((el) => { el.value = tu; });
+  if (!sheet.hidden) renderTech();
+}
+jeSelects.forEach((el) => el.addEventListener('change', () => setPronouns(el.value, S.tu)));
+tuSelects.forEach((el) => el.addEventListener('change', () => {
+  const tu = TU.find((p) => p.id === el.value) || TU[0];
+  setPronouns(tu.pair, tu.id);
+}));
+renderPronouns();
+$('langSelect').addEventListener('change', (e) => { save('lang', e.target.value); showLangSub(); });
+function showLangSub() { $('langSub').textContent = (LANGS.find((l) => l.id === S.lang) || LANGS[0]).sub; }
+$('vocabInput').addEventListener('change', (e) => save('vocab', e.target.value.trim()));
+
+// Réglettes du découpage : elles valent tout de suite, même pendant l'écoute.
+const pauseRange = $('pauseRange');
+const maxRange = $('maxRange');
+function renderCuts() {
+  pauseRange.value = String(S.pause);
+  maxRange.value = String(S.maxLen);
+  showCuts();
+}
+function showCuts() {
+  $('pauseOut').textContent = S.pause.toFixed(1).replace('.', ',') + ' s';
+  $('maxOut').textContent = S.maxLen + ' s';
+  $('maxSub').textContent = 'Passé ' + S.maxLen + ' s de parole, la phrase part à la première petite pause, au plus tard à ' + 2 * S.maxLen + ' s.';
+  $('cutReset').disabled = S.pause === CUT_DEFAULTS.pause && S.maxLen === CUT_DEFAULTS.maxLen;
+}
+pauseRange.addEventListener('input', () => {
+  save('pause', Math.round(Number(pauseRange.value) * 10) / 10);
+  showCuts();
+  applyTuning();
+});
+maxRange.addEventListener('input', () => {
+  save('maxLen', Math.round(Number(maxRange.value)));
+  showCuts();
+  applyTuning();
+});
+$('cutReset').addEventListener('click', () => {
+  save('pause', CUT_DEFAULTS.pause);
+  save('maxLen', CUT_DEFAULTS.maxLen);
+  renderCuts();
+  applyTuning();
+});
+
+$('enToggle').addEventListener('change', (e) => {
+  save('showEn', e.target.checked);
+  lines.forEach(render);
+});
+$('bigToggle').addEventListener('change', (e) => {
+  save('big', e.target.checked);
+  document.body.classList.toggle('big', S.big);
+});
+
+async function fillMics() {
+  const select = $('micSelect');
+  select.textContent = '';
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = 'Micro par défaut';
+  select.appendChild(def);
+  let devices = [];
+  try { devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default'); } catch (e) { devices = []; }
+  let unnamed = 0;
+  devices.forEach((d, i) => {
+    const o = document.createElement('option');
+    o.value = d.deviceId;
+    o.textContent = d.label || 'Micro ' + (i + 1);
+    if (!d.label) unnamed++;
+    o.dataset.label = d.label;
+    select.appendChild(o);
+  });
+  const match = devices.find((d) => (S.micLabel && d.label === S.micLabel) || d.deviceId === S.micId);
+  select.value = match ? match.deviceId : '';
+  $('micNames').hidden = !(unnamed && !listening);
+}
+
+$('micSelect').addEventListener('change', (e) => {
+  const option = e.target.selectedOptions[0];
+  save('micId', e.target.value);
+  save('micLabel', e.target.value ? (option.dataset.label || '') : '');
+  if (listening) recover();
+});
+
+function seconds(ms) {
+  return (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+}
+
+/** Une ligne du journal : durée, parole entendue, coupure, transcription, traduction. */
+function journalText(j) {
+  const plural = (n, w) => n + ' ' + w + (n > 1 ? 's' : '');
+  const parts = [seconds(j.sec * 1000) + (j.voiced ? ' (parole ' + seconds(j.voiced * 1000) + ')' : ''), 'coupée : ' + j.why];
+  if (j.asr !== null) parts.push('transcription ' + seconds(j.asr) + (j.words ? ' (' + plural(j.words, 'mot') + (j.lang ? ', ' + j.lang : '') + ')' : ' (vide)'));
+  else if (!j.error) parts.push('transcription…');
+  if (j.tr !== null) parts.push('traduction ' + seconds(j.tr) + (j.model && j.model !== S.model ? ' (' + modelName(j.model) + ')' : ''));
+  if (j.drop) parts.push(j.drop);
+  if (j.error) parts.push(j.error);
+  return parts.join(' · ');
+}
+
+function renderTech() {
+  const base = apiBase();
+  const rows = [
+    ['Écoute', 'phrase par phrase · Qwen3-ASR-Flash écrit ' + (S.lang === 'en' ? "l'anglais" : 'la langue reconnue') + ', ' + modelName(activeModel().id) + ' traduit'],
+    ['Serveur', base ? base.replace(/^https:\/\//, '') : 'adresse invalide'],
+    ['Pronoms', 'je\u00a0: ' + (S.je === 'auto' ? 'au choix de Qwen' : S.je) + ' · tu\u00a0: ' + (S.tu === 'auto' ? 'au choix de Qwen' : S.tu)],
+    ['Audio', tech.mode ? tech.mode + ' · ' + tech.rate + '\u00a0Hz → 16\u00a0kHz' : 'pas encore démarré'],
+    ['Gain du micro', typeof tech.gain === 'number' ? (tech.gain >= 0 ? '+' : '−') + Math.abs(Math.round(tech.gain)) + ' dB, automatique' : 'automatique (×16 au plus par phrase)'],
+    ['Dernière phrase', tech.asr ? 'transcription ' + seconds(tech.asr) + (tech.tr ? ' · traduction ' + seconds(tech.tr) : '') : '—'],
+    ['Écran allumé', 'wakeLock' in navigator ? (wakeLock ? 'actif' : "pendant l'écoute") : 'non pris en charge'],
+    ['Découpage', 'fin de phrase après ' + seconds(S.pause * 1000) + ' de silence · réplique longue coupée vers ' + S.maxLen + ' s (au plus ' + 2 * S.maxLen + ' s)']
+  ];
+  if (trState.note) rows.push(['Modèle', trState.note]);
+  if (tech.probe && !tech.probe.ok) rows.push(['Dernier test', probeMessage(tech.probe)]);
+  // Dernières phrases, de la plus récente à la plus ancienne.
+  for (const j of journal.slice(-8).reverse()) {
+    rows.push([j.t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), journalText(j)]);
+  }
+  const dl = $('techInfo');
+  dl.textContent = '';
+  for (const [k, v] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    dl.append(dt, dd);
+  }
+}
+
+// ─── Démarrage ───────────────────────────────────────────────────────────────
+updateStatus();
+if (!S.apiKey) openSettings(true);
+</script>
+</body>
+</html>
